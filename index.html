@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Import the p5.js library --><script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  
+  <title>Particle System</title>
+  <style>
+    /* A simple reset to make the canvas fill the screen */
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* Prevents scrollbars */
+      background: #202020; /* Dark grey background */
+    }
+    
+    main {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      position: relative; /* New: for positioning video */
+    }
+    
+    #p5-canvas-container {
+      width: 100%;
+      height: 100%;
+      position: relative; /* New: to ensure it has a stacking context */
+      z-index: 2; /* Canvas on top */
+    }
+    
+    /* NEW: Video Player Styling */
+    #animation-video {
+      display: none; /* Hide by default */
+      position: absolute; /* Position relative to main */
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1; /* Video behind canvas */
+      object-fit: cover;
+      /* Width and height will be set by JS */
+    }
+    
+    /* NEW: Portal Video Styling */
+    #portal-image {
+      display: none; /* Hide by default */
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 1; /* Behind canvas, same level as animation-video */
+    }
+    
+    /* NEW: SVG Logo Styling */
+    #logo-svg {
+      position: absolute;
+      top: 20px;
+      left: 40px; /* MODIFIED: Moved 20px to the right (was 20px) */
+      width: 150px; /* Or any size you prefer */
+      z-index: 10; /* Make sure it's on top of the canvas */
+      
+      /* This filter trick forces the black SVG to white */
+      filter: brightness(0) invert(1);
+      
+      /* NEW: Add transition for smooth color change */
+      transition: filter 0.5s ease;
+    }
+    
+    /* NEW: Class to make the logo black */
+    #logo-svg.black {
+      filter: brightness(0) invert(0); /* This makes it black */
+    }
+    
+    /* NEW: Light theme logo color */
+    body.light-theme #logo-svg {
+      filter: brightness(0) invert(0.2); /* Dark grey, approx rgb(51, 51, 51) */
+    }
+    
+    /* NEW: Styles for the theme toggle switch */
+    .theme-switch-wrapper {
+      position: absolute;
+      top: 25px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      z-index: 100; /* Above everything */
+    }
+    .theme-switch {
+      display: inline-block;
+      height: 26px; /* Taller */
+      position: relative;
+      width: 50px; /* Wider */
+    }
+    .theme-switch input {
+      display: none;
+    }
+    .slider {
+      background-color: #555; /* Darker track */
+      bottom: 0;
+      cursor: pointer;
+      left: 0;
+      position: absolute;
+      right: 0;
+      top: 0;
+      transition: .4s;
+    }
+    .slider:before {
+      background-color: #fff;
+      bottom: 4px; /* Centered */
+      content: "";
+      height: 18px; /* Smaller circle */
+      left: 4px;
+      position: absolute;
+      transition: .4s;
+      width: 18px;
+    }
+    input:checked + .slider {
+      background-color: #ccc; /* Light track */
+    }
+    input:checked + .slider:before {
+      transform: translateX(24px); /* Adjusted translation */
+    }
+    .slider.round {
+      border-radius: 26px;
+    }
+    .slider.round:before {
+      border-radius: 50%;
+    }
+    /* End of toggle styles */
+    
+  </style>
+    </style>
+</head>
+
+<!-- MODIFIED: Start with default dark theme, class will be toggled --><body>
+  <!-- MODIFIED: Merged two <main> tags into one --><main>
+    <!-- NEW: Theme Toggle HTML --><div class="theme-switch-wrapper">
+      <label class="theme-switch" for="theme-toggle-input">
+        <input type="checkbox" id="theme-toggle-input">
+        <span class="slider round"></span>
+      </label>
+    </div>
+    <!-- END NEW --><!-- NEW: SVG Logo --><img id="logo-svg" src="https://raw.githubusercontent.com/colinwillow/SVGs/main/Colin_Willow.svg" alt="Colin Willow Logo">
+    
+    <!-- NEW: Video Player --><video id="animation-video" loop muted playsinline>
+      <!-- Use the raw content link for the video --><source src="https://raw.githubusercontent.com/colinwillow/videos_02/main/Hero_Video_01.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+    
+    <!-- NEW: Portal Video Player --><img id="portal-image" src="https://raw.githubusercontent.com/colinwillow/images/main/Portal_Generator.jpg" alt="Portal Background">
+    
+    <!-- p5.js particles will be rendered here --><div id="p5-canvas-container"></div>
+  </main>
+
+  <!-- =============================================== --><!-- SCRIPT: p5.js Particle Code --><!-- =============================================== --><script>
+  
+    // --- INLINED RectButton.js CLASS (Old Button) ---
+    class RectButton {
+      // Constructor
+      constructor(x, y, w, h, txt, colorOverride) {
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+        this.txt = txt;
+        
+        // Colors 
+        this.baseColor = color(255, 255, 255, 150); // Semi-transparent white
+        this.hoverColor = color(255, 255, 255, 255); // Solid white
+        this.activeColor = colorOverride || color(50, 255, 50, 255); // Use passed color for active state
+        this.textColor = color(0, 0, 0, 200); // Dark text
+        
+        this.isHovering = false;
+        this.isActive = false; 
+      }
+      
+      // Check if the mouse is over the button
+      isHovered() {
+        let mouseIsOver = (mouseX > this.x - this.w / 2 &&
+                           mouseX < this.x + this.w / 2 &&
+                           mouseY > this.y - this.h / 2 &&
+                           mouseY < this.y + this.h / 2);
+        
+        this.isHovering = mouseIsOver;
+        return this.isHovering;
+      }
+      
+      // Draw the button
+      show() {
+        push();
+        
+        rectMode(CENTER);
+        textAlign(CENTER, CENTER);
+        
+        // Set fill color based on active/hover state
+        if (this.isActive) { // Check active state first
+          fill(this.activeColor);
+          noStroke();
+        } else if (this.isHovering) {
+          fill(this.hoverColor);
+          noStroke();
+        } else {
+          fill(this.baseColor);
+          noStroke();
+        }
+        
+        // Draw the button rectangle
+        rect(this.x, this.y, this.w, this.h, 5); // 5 is for rounded corners
+        
+        // Draw the text
+        fill(this.textColor);
+        textSize(14);
+        text(this.txt, this.x, this.y);
+        
+        pop();
+      }
+    }
+    // --- END INLINED RectButton.js CLASS ---
+
+    // --- NEW: INLINED SpaceButton.js CLASS (Replaces Back Button) ---
+    class SpaceButton {
+      constructor(x, y, w, h, activeColor) {
+        this.x = x;
+        this.y = y;
+        this.w = w; // Base width
+        this.h = h; // Base height
+        
+        // Target values for lerping
+        this.h1_base = h;       // Inner rect base height
+        this.h2_base = h;       // Outer rect base height
+        this.h1_hover = 5;      // Inner rect hover height (shrinks)
+        this.h2_hover = h + 10; // Outer rect hover height (grows)
+        
+        // Current lerped values
+        this.h1_lerp = this.h1_base;
+        this.h2_lerp = this.h2_base;
+
+        this.isActive = false;
+        this.isHovering = false;
+        
+        // Colors
+        this.baseColor = color(70, 70, 70, 150); // Darker grey for inactive state
+        this.hoverColor = color(255, 255, 255, 255); // Solid white
+        this.activeColor = activeColor;
+        this.currentColor = this.baseColor;
+      }
+
+      isHovered() {
+        // Use the same rectangular check as RectButton
+        let mouseIsOver = (mouseX > this.x - this.w / 2 &&
+                           mouseX < this.x + this.w / 2 &&
+                           mouseY > this.y - this.h / 2 &&
+                           mouseY < this.y + this.h / 2);
+        this.isHovering = mouseIsOver;
+        return this.isHovering;
+      }
+
+      hoverAnimate() {
+        if (this.isHovering || this.isActive) {
+          this.h1_lerp = lerp(this.h1_lerp, this.h1_hover, 0.4);
+          this.h2_lerp = lerp(this.h2_lerp, this.h2_hover, 0.4);
+        } else {
+          this.h1_lerp = lerp(this.h1_lerp, this.h1_base, 0.2);
+          this.h2_lerp = lerp(this.h2_lerp, this.h2_base, 0.2);
+        }
+      }
+
+      show() {
+        this.isHovered();
+        this.hoverAnimate();
+
+        // --- NEW: Set colors based on theme ---
+        let currentBaseColor = this.baseColor; // Stays dark grey
+        let currentHoverColor = this.hoverColor; // Default white
+        let currentActiveColor = this.activeColor; // Default white
+        
+        if (isLightTheme) {
+          currentHoverColor = color(50, 50, 50, 255); // Solid dark grey
+          currentActiveColor = color(50, 50, 50, 255); // Solid dark grey
+        }
+        // --- END NEW ---
+
+        // Determine current color
+        if (this.isActive) {
+          // --- MODIFIED ---
+          this.currentColor = currentActiveColor;
+          // --- END MODIFIED ---
+        } else if (this.isHovering) {
+          // --- MODIFIED ---
+          this.currentColor = currentHoverColor;
+          // --- END MODIFIED ---
+        } else {
+          this.currentColor = currentBaseColor; // This is already dark grey
+        }
+
+        push();
+        translate(this.x, this.y);
+        rectMode(CENTER);
+        noFill();
+        strokeWeight(1); // Super thin stroke
+        
+        // Draw the two "breathing" rectangles
+        stroke(this.currentColor);
+        rect(0, 0, this.w, this.h1_lerp, 2);       // Inner rect
+        rect(0, 0, this.w - 10, this.h2_lerp, 5); // Outer rect
+        
+        // Draw the text
+        noStroke();
+        fill(this.currentColor); // Use the same animated color
+        textAlign(CENTER, CENTER);
+        textSize(14);
+        text("BACK TO PORTAL", 0, 0);
+
+        pop();
+      }
+    }
+    // --- END INLINED SpaceButton.js CLASS ---
+    
+    // --- NEW: INLINED AnimatedButton.js CLASS (User's Button) ---
+    class AnimatedButton {
+      constructor(x, y, r, activeColor) {
+        this.x = x;
+        this.y = y;
+        this.r_base = r; // Base radius (e.g., 30)
+        this.r1 = r;
+        this.r2 = r;
+        
+        this.hoverRadius = 25; // Click/hover activation radius
+        
+        this.isActive = false;
+        this.isHovering = false;
+        
+        this.baseColor = color(255, 255, 255, 100); // Semi-transparent white for base
+        this.hoverColor = color(255, 255, 255); // White for hover
+        this.activeColor = activeColor; // Color from COLOR_MAP
+      }
+
+      // Check if the mouse is over the button
+      isHovered() {
+        const distance = dist(mouseX, mouseY, this.x, this.y);
+        this.isHovering = (distance < this.hoverRadius);
+        return this.isHovering;
+      }
+      
+      // Animate the radii based on state
+      hoverAnimate() {
+         if (this.isHovering || this.isActive) {
+           this.r1 = lerp(this.r1, 80, 0.4);
+           this.r2 = lerp(this.r2, 5, 0.4);
+         } else {
+           this.r1 = lerp(this.r1, this.r_base, 0.2);
+           this.r2 = lerp(this.r2, this.r_base, 0.2); // Fix: this.r2_base was undefined, changed to r_base
+         }
+      }
+
+      // Draw the button
+      show() {
+        this.isHovered();     // Update hover state
+        this.hoverAnimate();  // Update animation values
+        
+        push();
+        
+        translate(this.x, this.y);
+        strokeWeight(2); // Super thin stroke
+        
+        // --- NEW: Set colors based on theme ---
+        let currentBaseColor = this.baseColor;
+        let currentHoverColor = this.hoverColor;
+        
+        if (isLightTheme) {
+          currentBaseColor = color(50, 50, 50, 100); // Dark grey, semi-transparent
+          currentHoverColor = color(50, 50, 50, 255); // Dark grey, solid
+        }
+        // --- END NEW ---
+
+        // Set color based on state
+        if (this.isActive) {
+          stroke(this.activeColor);
+        } else if (this.isHovering) {
+          // --- MODIFIED ---
+          stroke(currentHoverColor);
+          // --- END MODIFIED ---
+        } else {
+          // --- MODIFIED ---
+          stroke(currentBaseColor); 
+          // --- END MODIFIED ---
+        }
+        
+        noFill();
+
+        push();
+        arc(0, 0, this.r2, this.r2, 0, TWO_PI/6);
+        arc(0, 0, this.r2, this.r2, 2*TWO_PI/6, 3*TWO_PI/6);
+        arc(0, 0, this.r2, this.r2, 4*TWO_PI/6, 5*TWO_PI/6);
+        pop();
+
+        push();
+        rotate(TWO_PI/6);
+        arc(0, 0, this.r1, this.r1, 0, TWO_PI/6);
+        arc(0, 0, this.r1, this.r1, 2*TWO_PI/6, 3*TWO_PI/6);
+        arc(0, 0, this.r1, this.r1, 4*TWO_PI/6, 5*TWO_PI/6);
+        pop();
+
+        pop();
+      }
+    }
+    // --- END INLINED AnimatedButton.js CLASS ---
+
+    let vehicles = [];
+    
+    // These arrays will hold the target coordinates for our vehicles.
+    let targetCircleX = [];
+    let targetCircleY = [];
+    let targetCodeX = []; // Word shape targets
+    let targetCodeY = []; // Word shape targets
+    let targetAnimationWordX = []; // Loaded from JSON (Hover preview)
+    let targetAnimationWordY = [];
+    let targetAnimationRectX = []; // Generated Rectangles (Permanent State)
+    let targetAnimationRectY = [];
+    
+    // --- NEW: Design Word (from JSON) ---
+    let targetDesignWordX = []; 
+    let targetDesignWordY = [];
+    // --- END NEW ---
+    
+    let targetDesignCirclesX = [];
+    let targetDesignCirclesY = [];
+    let targetGridX = []; 
+    let targetGridY = [];
+    
+    // --- NEW: Wormhole Targets ---
+    let targetWormholeX = [];
+    let targetWormholeY = [];
+    let targetWormholeZ = [];
+    let wormholeOffsetZ = 0;
+    
+    // --- MODIFIED WORMHOLE CONSTANTS ---
+    const WORMHOLE_FOV = 500; // Increased Field of View for a wider perspective
+    const WORMHOLE_TUNNEL_DEPTH = 1000; // Much deeper tunnel
+    const WORMHOLE_NUM_RINGS = 50; // More rings for smoother tunnel
+    const WORMHOLE_RADIUS = 500; // Much larger radius for a bigger tunnel
+    // --- END MODIFIED ---
+    
+    // --- END NEW ---
+
+    // --- NEW: Color Map and State Variables ---
+    const COLOR_MAP = {
+      'grid_code': [0, 175, 190, 255], 
+      'grid_animation': [220, 220, 220, 255], // This color is no longer used for particles, just the button
+      'grid_design': [50, 200, 150, 255], 
+      'grid_wormhole': [220, 100, 255, 255], // New color for wormhole
+      'grid_extra': [255, 255, 255, 255],    // New color for extra (white)
+      'circle': [255, 255, 255, 255]
+    };
+    
+    let currentFormation = 'circle'; 
+    let particleTargetColor = COLOR_MAP['circle']; 
+    let particleCurrentColor = [...particleTargetColor]; 
+    let extraBackgroundLerp = 0; // 0 = dark, 1 = white
+    let isLightTheme = false; // <-- NEW: Theme toggle state
+    // --- END NEW ---
+ 
+    let numVehicles = 0; // This will be set to the smallest JSON length
+    
+    // Variables to hold data for each file
+    let particleCodeData;
+    let particleAnimationData;
+    let particleDesignData; // <-- NEW
+    
+    // Button objects
+    let animationButton;
+    let codeButton;
+    let designButton;
+    let backButton;
+    let wormholeButton; // <-- NEW
+    let extraButton;    // <-- NEW
+    
+    // Hover states (only used in 'circle' mode)
+    let isHoveringAnimation = false;
+    let isHoveringCode = false;
+    let isHoveringDesign = false;
+    let isHoveringWormhole = false; // <-- NEW
+    let isHoveringExtra = false;    // <-- NEW
+
+    let scale;
+    let formationOffsetY = 0;
+    
+    // --- NEW: Video layout globals ---
+    let videoTopY = 0;
+    let videoHeight = 0;
+    // --- END NEW ---
+    
+    // Target number of points (fallback)
+    const FALLBACK_POINT_COUNT = 2300;
+
+    // --- FIX: Constants for SVG/Design normalization and view ---
+    const SVG_TARGET_SIZE = 400; // The virtual "box" size to normalize the design points into
+    const SVG_VIEW_SCALE = 0.6; // The scale to apply to the normalized points for hover preview
+    // --- END FIX ---
+
+
+    // --- PRELOAD FUNCTION (Loads ALL remote JSON) ---
+    function preload() {
+      const timeStamp = "?v=" + Date.now(); 
+      
+      console.log("Loading all particle data from JSON...");
+      
+      const codeDataUrl = "https://raw.githubusercontent.com/colinwillow/json_files/main/code.json" + timeStamp;
+      particleCodeData = loadJSON(codeDataUrl, () => console.log("Code data loaded."));
+
+      const animationDataUrl = "https://raw.githubusercontent.com/colinwillow/json_files/main/animation.json" + timeStamp;
+      particleAnimationData = loadJSON(animationDataUrl, () => console.log("Animation data loaded."));
+
+      // --- NEW: Load the Design JSON ---
+      const designDataUrl = "https://raw.githubusercontent.com/colinwillow/json_files/main/design.json" + timeStamp;
+      particleDesignData = loadJSON(designDataUrl, () => console.log("Design data loaded."));
+    }
+    // --- END PRELOAD ---
+
+    // --- DATA LOADING (Circle) ---
+    // Now uses numVehicles to generate the correct amount
+    function generateCircleData() {
+      console.log(`Generating circle data for ${numVehicles} particles...`);
+      targetCircleX = [];
+      targetCircleY = [];
+      let maxRadius = 140;
+
+      for (let j = 0; j < numVehicles; j++) {
+        let r = maxRadius * sqrt(random(1)); 
+        let angle = random(TWO_PI);
+        targetCircleX[j] = cos(angle) * r;
+        targetCircleY[j] = sin(angle) * r;
+      }
+      console.log("Circle data generated with " + targetCircleX.length + " points.");
+    }
+
+    // --- DATA LOADING (JSON for Code) ---
+    // Now uses numVehicles to truncate the data
+    function loadCodeData() {
+      if (!particleCodeData) {
+        console.error("Code JSON data not loaded!");
+        return;
+      }
+      targetCodeX = [];
+      targetCodeY = [];
+      
+      // --- NEW: Robust Multi-Path Logic (mirrors loadDesignData) ---
+      let dataArray = [];
+      if (Array.isArray(particleCodeData)) {
+          dataArray = particleCodeData;
+      } else if (typeof particleCodeData === 'object' && particleCodeData !== null) {
+          const objectVals = Object.values(particleCodeData);
+          let successfullyAggregated = false;
+          
+          for (const val of objectVals) {
+              if (Array.isArray(val) && val.length > 0) {
+                  const firstItem = val[0];
+                  // --- FIX: Added check for old object format ---
+                  if ( (Array.isArray(firstItem) && firstItem.length >= 2) || (typeof firstItem === 'object' && firstItem !== null && 'x' in firstItem && 'y' in firstItem) || (typeof firstItem === 'object' && firstItem !== null && Object.values(firstItem).length >= 3) || (typeof firstItem === 'object' && firstItem !== null && 'X' in firstItem && 'Y' in firstItem) ) {
+                       dataArray = dataArray.concat(val);
+                       successfullyAggregated = true;
+                  }
+              }
+          }
+          if (!successfullyAggregated) {
+              const firstVal = objectVals[0];
+               // --- FIX: Added check for old object format ---
+               if (objectVals.length > 0 && typeof firstVal === 'object' && firstVal !== null && ('x' in firstVal && 'y' in firstVal || Object.values(firstVal).length >= 3 || 'X' in firstVal && 'Y' in firstVal)) {
+                  dataArray = objectVals;
+               } else {
+                  console.warn("Code data is an object, but couldn't find point arrays.");
+               }
+          }
+      }
+      // --- END ROBUST LOGIC ---
+      
+      const loadCount = min(dataArray.length, numVehicles);
+      
+      if (loadCount === 0 || dataArray.length === 0) {
+          console.error("Could not find point data inside code.json");
+          return;
+      }
+
+      // Check format of the *actual* first point
+      const firstPoint = dataArray[0]; // <-- FIX: Was 'firstItem'
+      let format = "unknown";
+      if (Array.isArray(firstPoint) && firstPoint.length >= 2) format = "array";
+      else if (typeof firstPoint === 'object' && firstPoint !== null && 'x' in firstPoint && 'y' in firstPoint) format = "object";
+      // --- FIX: Added check for uppercase "X", "Y" keys ---
+      else if (typeof firstPoint === 'object' && firstPoint !== null && 'X' in firstPoint && 'Y' in firstPoint) format = "object_uppercase_strings";
+      else if (typeof firstPoint === 'object' && firstPoint !== null) {
+          // Fallback for old format: { "0": 1, "1": X, "2": Y }
+          const pointValues = Object.values(firstPoint);
+          if (pointValues.length >= 3 && typeof pointValues[1] === 'number' && typeof pointValues[2] === 'number') {
+              format = "old_object";
+          }
+      }
+      
+      if (format === "unknown") {
+          console.error("Unknown point format in code.json", firstPoint);
+          return;
+      }
+
+      for (let j = 0; j < loadCount; j++) {
+        let x, y;
+        const point = dataArray[j];
+        
+        if (format === "array") {
+            x = point[0];
+            y = point[1];
+        } else if (format === "object") {
+            x = point.x;
+            y = point.y;
+        // --- FIX: Added case to handle uppercase strings ---
+        } else if (format === "object_uppercase_strings") {
+            x = parseFloat(point.X);
+            y = parseFloat(point.Y);
+        } else if (format === "old_object") {
+            const values = Object.values(point); // e.g., [1, X, Y]
+            x = values[1];
+            y = values[2];
+        }
+
+        targetCodeX.push(x);
+        targetCodeY.push(y);
+      }
+      
+      console.log(`Code word shape data loaded with ${targetCodeX.length} points.`);
+    }
+
+    // --- DATA LOADING (JSON for Animation) ---
+    // Now uses numVehicles to truncate the data
+    function loadAnimationWordData() {
+      if (!particleAnimationData) {
+        console.error("Animation JSON data not loaded!");
+        return;
+      }
+      targetAnimationWordX = [];
+      targetAnimationWordY = [];
+      
+      // --- NEW: Robust Multi-Path Logic (mirrors loadDesignData) ---
+      let dataArray = [];
+      if (Array.isArray(particleAnimationData)) {
+          dataArray = particleAnimationData;
+      } else if (typeof particleAnimationData === 'object' && particleAnimationData !== null) {
+          const objectVals = Object.values(particleAnimationData);
+          let successfullyAggregated = false;
+          
+          for (const val of objectVals) {
+              if (Array.isArray(val) && val.length > 0) {
+                  const firstItem = val[0];
+                  // --- FIX: Added check for old object format ---
+                  if ( (Array.isArray(firstItem) && firstItem.length >= 2) || (typeof firstItem === 'object' && firstItem !== null && 'x' in firstItem && 'y' in firstItem) || (typeof firstItem === 'object' && firstItem !== null && Object.values(firstItem).length >= 3) || (typeof firstItem === 'object' && firstItem !== null && 'X' in firstItem && 'Y' in firstItem) ) {
+                       dataArray = dataArray.concat(val);
+                       successfullyAggregated = true;
+                  }
+              }
+          }
+          if (!successfullyAggregated) {
+              const firstVal = objectVals[0];
+               // --- FIX: Added check for old object format ---
+               if (objectVals.length > 0 && typeof firstVal === 'object' && firstVal !== null && ('x' in firstVal && 'y' in firstVal || Object.values(firstVal).length >= 3 || 'X' in firstVal && 'Y' in firstVal)) {
+                  dataArray = objectVals;
+               } else {
+                  console.warn("Animation data is an object, but couldn't find point arrays.");
+               }
+          }
+      }
+      // --- END ROBUST LOGIC ---
+      
+      const loadCount = min(dataArray.length, numVehicles);
+      
+      if (loadCount === 0 || dataArray.length === 0) {
+          console.error("Could not find point data inside animation.json");
+          return;
+      }
+
+      // Check format of the *actual* first point
+      const firstPoint = dataArray[0]; // <-- FIX: Was 'firstItem'
+      let format = "unknown";
+      if (Array.isArray(firstPoint) && firstPoint.length >= 2) format = "array";
+      else if (typeof firstPoint === 'object' && firstPoint !== null && 'x' in firstPoint && 'y' in firstPoint) format = "object";
+      // --- FIX: Added check for uppercase "X", "Y" keys ---
+      else if (typeof firstPoint === 'object' && firstPoint !== null && 'X' in firstPoint && 'Y' in firstPoint) format = "object_uppercase_strings";
+      else if (typeof firstPoint === 'object' && firstPoint !== null) {
+          // Fallback for old format: { "0": 1, "1": X, "2": Y }
+          const pointValues = Object.values(firstPoint);
+          if (pointValues.length >= 3 && typeof pointValues[1] === 'number' && typeof pointValues[2] === 'number') {
+              format = "old_object";
+          }
+      }
+      
+      if (format === "unknown") {
+          console.error("Unknown point format in animation.json", firstPoint);
+          return;
+      }
+
+      for (let j = 0; j < loadCount; j++) {
+        let x, y;
+        const point = dataArray[j];
+        
+        if (format === "array") {
+            x = point[0];
+            y = point[1];
+        } else if (format === "object") {
+            x = point.x;
+            y = point.y;
+        // --- FIX: Added case to handle uppercase strings ---
+        } else if (format === "object_uppercase_strings") {
+            x = parseFloat(point.X);
+            y = parseFloat(point.Y);
+        } else if (format === "old_object") {
+            const values = Object.values(point); // e.g., [1, X, Y]
+            x = values[1];
+            y = values[2];
+        }
+
+        targetAnimationWordX.push(x);
+        targetAnimationWordY.push(y);
+      }
+      
+      console.log(`Animation word shape data loaded with ${targetAnimationWordX.length} points.`);
+    }
+    
+    // --- NEW: DATA LOADING (JSON for Design) ---
+    // This replaces the complex SVG parser
+    function loadDesignData() {
+        if (!particleDesignData) {
+            console.error("Design JSON data not loaded!");
+            return;
+        }
+        targetDesignWordX = [];
+        targetDesignWordY = [];
+        
+        // --- NEW ROBUST LOGIC ---
+        let dataArray = [];
+        if (Array.isArray(particleDesignData)) {
+            dataArray = particleDesignData; // It's a raw array [ {x,y}, ... ] or [ [x,y], ... ]
+        } else if (typeof particleDesignData === 'object' && particleDesignData !== null) {
+            // It's an object, possibly with multiple paths
+            const objectVals = Object.values(particleDesignData);
+            let successfullyAggregated = false;
+            
+            for (const val of objectVals) {
+                // Check if this value is an array of points
+                if (Array.isArray(val) && val.length > 0) {
+                    // Check if the first item looks like a point
+                    const firstItem = val[0];
+                    if ( (Array.isArray(firstItem) && firstItem.length >= 2) || (typeof firstItem === 'object' && firstItem !== null && 'x' in firstItem && 'y' in firstItem) ) {
+                         dataArray = dataArray.concat(val); // <-- FIX: Concat, don't just assign and break
+                         successfullyAggregated = true;
+                    }
+                }
+            }
+            
+            // Fallback: If we didn't aggregate any arrays (maybe it's a flat object of points like {"0": {x,y}, ...})
+            if (!successfullyAggregated) {
+                 // Check if the *first value* of the object (not the array) looks like a point object
+                const firstVal = objectVals[0];
+                 if (objectVals.length > 0 && typeof firstVal === 'object' && firstVal !== null && 'x' in firstVal && 'y' in firstVal) {
+                    dataArray = objectVals; // Assume format { "0": {x,y}, "1": {x,y} }
+                 } else {
+                    console.warn("Design data is an object, but couldn't find point arrays to aggregate.");
+                 }
+            }
+        }
+        // --- END ROBUST LOGIC ---
+        
+        const loadCount = min(dataArray.length, numVehicles); 
+        
+        if (loadCount === 0 || dataArray.length === 0) {
+            console.error("Could not find point data inside design.json");
+            return;
+        }
+
+        // Check format of the *actual* first point
+        const firstPoint = dataArray[0]; 
+        
+        let format = "unknown";
+        if (Array.isArray(firstPoint) && firstPoint.length >= 2) {
+             format = "array"; // [x, y]
+        } else if (typeof firstPoint === 'object' && firstPoint !== null && 'x' in firstPoint && 'y' in firstPoint) { // <-- FIX: Was firstItem
+             format = "object"; // { x: ..., y: ... }
+        }
+
+        if (format === "unknown") {
+            console.error("Unknown point format in design.json", firstPoint);
+            return;
+        }
+        
+        for (let j = 0; j < loadCount; j++) {
+            let x, y;
+            const point = dataArray[j]; // Get the point data
+
+            if (format === "array") {
+                x = point[0];
+                y = point[1];
+            } else { // format === "object"
+                x = point.x;
+                y = point.y;
+            }
+
+            targetDesignWordX.push(x);
+            targetDesignWordY.push(y);
+        }
+        
+        // --- This function centers and scales the points ---
+        // It's much simpler now as it just reads the arrays
+        normalizeDesignData();
+        
+        console.log(`Design word shape data loaded with ${targetDesignWordX.length} points.`);
+    }
+    
+    // --- NEW: Helper function to normalize the Design JSON data ---
+    function normalizeDesignData() {
+        if (targetDesignWordX.length === 0) {
+            console.error("normalizeDesignData: No points to normalize.");
+            return;
+        }
+
+        // 1. Calculate bounding box for centering
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        
+        for (let i = 0; i < targetDesignWordX.length; i++) {
+            minX = min(minX, targetDesignWordX[i]);
+            minY = min(minY, targetDesignWordY[i]);
+            maxX = max(maxX, targetDesignWordX[i]);
+            maxY = max(maxY, targetDesignWordY[i]);
+        }
+        
+        const shapeWidth = maxX - minX;
+        const shapeHeight = maxY - minY;
+        
+        const offsetX = (minX + maxX) / 2;
+        const offsetY = (minY + maxY) / 2;
+
+        const maxDim = max(shapeWidth, shapeHeight);
+        // --- FIX: Use the SVG_TARGET_SIZE constant ---
+        const normalizeScale = (maxDim > 0) ? SVG_TARGET_SIZE / maxDim : 1;
+
+        // 2. Normalize all points in the arrays
+        for (let i = 0; i < targetDesignWordX.length; i++) {
+            targetDesignWordX[i] = (targetDesignWordX[i] - offsetX) * normalizeScale;
+            targetDesignWordY[i] = (targetDesignWordY[i] - offsetY) * normalizeScale;
+        }
+        
+        console.log("Design data normalized and centered.");
+    }
+    
+    
+    // --- DATA GENERATION (Concentric Circles for Design - Permanent State) ---
+    window.generateConcentricCircleData = function() {
+      console.log(`Generating concentric circle data for ${numVehicles} particles...`);
+      targetDesignCirclesX = [];
+      targetDesignCirclesY = [];
+      
+      // --- NEW: Define min/max radius for the rings ---
+      const numRings = 15;
+      const minRadius = 400; // User-requested inner radius
+      const maxRadius = 700; // The outer-most radius (minRadius + 300)
+      const ringSpacing = (maxRadius - minRadius) / (numRings > 1 ? numRings - 1 : 1);
+      // --- END NEW ---
+
+      const particlesPerRing = Math.ceil(numVehicles / numRings);
+      let particleCount = 0;
+      
+      for (let ring = 0; ring < numRings; ring++) {
+          // --- MODIFIED: Use new radius calculation ---
+          const radius = minRadius + (ring * ringSpacing);
+          // --- END MODIFIED ---
+          
+          const currentParticles = Math.min(particlesPerRing, numVehicles - particleCount);
+
+          for (let i = 0; i < currentParticles; i++) {
+              if (particleCount >= numVehicles) break;
+              const angle = (i / currentParticles) * TWO_PI; 
+              targetDesignCirclesX.push(cos(angle) * radius);
+              targetDesignCirclesY.push(sin(angle) * radius);
+              particleCount++;
+          }
+      }
+      console.log(`Concentric circle data generated with ${targetDesignCirclesX.length} points.`);
+    }
+    
+    // --- DATA GENERATION (Concentric Rectangles for Animation - Permanent State) ---
+    window.generateAnimationRectData = function() {
+      console.log(`Generating concentric rectangle data for ${numVehicles} particles...`);
+      
+      targetAnimationRectX = [];
+      targetAnimationRectY = [];
+
+      // --- NEW LOGIC for Video Player Border ---
+      const numRects = 2;
+      const aspectRatio = 16 / 9;
+      const padding = 40; // 20px margin on each side
+      const inset = 20; // 20px inset for the inner rect
+
+      // 1. Calculate outer dimensions, fitting to screen
+      let outerW = width - padding;
+      let outerH = outerW / aspectRatio;
+
+      // Check if height is too large, and scale based on height if so
+      if (outerH > height - 80) { // 80px total vertical margin (40 top, 40 bottom)
+        outerH = height - 80;
+        outerW = outerH * aspectRatio;
+      }
+
+      // 2. Calculate inner dimensions
+      let innerW = outerW - (inset * 2);
+      let innerH = outerH - (inset * 2);
+      
+      const rects = [
+        { w: outerW, h: outerH },
+        { w: innerW, h: innerH }
+      ];
+      // --- END NEW LOGIC ---
+      
+      const particlesPerRect = Math.ceil(numVehicles / numRects);
+      let totalPointsGenerated = 0;
+
+      for (let i = 0; i < numRects; i++) {
+          const w = rects[i].w;
+          const h = rects[i].h;
+          const perimeter = 2 * (w + h);
+          let pointsForThisRect = Math.min(particlesPerRect, numVehicles - totalPointsGenerated);
+          
+          if (i === numRects - 1) { // Last rect gets all remaining points
+             pointsForThisRect = numVehicles - totalPointsGenerated;
+          }
+          
+          if (pointsForThisRect <= 0) break;
+
+          for (let j = 0; j < pointsForThisRect; j++) {
+              // Distribute points evenly along the perimeter
+              const fraction = j / pointsForThisRect;
+              let x, y;
+              
+              const p_fraction = fraction * perimeter; // position along perimeter
+
+              if (p_fraction < w) { // Top edge
+                  x = map(p_fraction, 0, w, -w / 2, w / 2);
+                  y = -h / 2;
+              } else if (p_fraction < w + h) { // Right edge
+                  x = w / 2;
+                  y = map(p_fraction, w, w + h, -h / 2, h / 2);
+              } else if (p_fraction < 2 * w + h) { // Bottom edge
+                  x = map(p_fraction, w + h, 2 * w + h, w / 2, -w / 2);
+                  y = h / 2;
+              } else { // Left edge
+                  x = -w / 2;
+                  y = map(p_fraction, 2 * w + h, perimeter, h / 2, -h / 2);
+              }
+
+              targetAnimationRectX.push(x);
+              targetAnimationRectY.push(y);
+              totalPointsGenerated++;
+          }
+      }
+      
+      // This loop should not be necessary if we assign all remaining points to the last rect
+      // but we keep it as a safety fallback.
+      while (targetAnimationRectX.length < numVehicles) {
+          targetAnimationRectX.push(random(-25, 25)); 
+          targetAnimationRectY.push(random(-25, 25));
+      }
+
+      console.log(`Concentric rectangle data regenerated with ${targetAnimationRectX.length} points.`);
+    }
+    
+    // --- NEW: Function to size and position the video player ---
+    function updateVideoSize() {
+      const video = document.getElementById('animation-video');
+      if (!video) return;
+
+      // Logic copied from generateAnimationRectData
+      const aspectRatio = 16 / 9;
+      const padding = 40; // 20px margin on each side
+      
+      let outerW = width - padding;
+      let outerH = outerW / aspectRatio;
+
+      if (outerH > height - 80) { // 80px total vertical margin
+        outerH = height - 80;
+        outerW = outerH * aspectRatio;
+      }
+      
+      // Apply the calculated dimensions
+      video.style.width = `${outerW}px`;
+      video.style.height = `${outerH}px`;
+      
+      // --- NEW: Store video dimensions globally ---
+      videoHeight = outerH;
+      videoTopY = (height - videoHeight) / 2;
+      // --- END NEW ---
+    }
+    // --- END NEW ---
+
+    // --- NEW: DATA GENERATION (Wormhole Tunnel - Permanent State) ---
+    window.generateWormholeData = function() {
+      console.log(`Generating wormhole data for ${numVehicles} particles...`);
+      targetWormholeX = [];
+      targetWormholeY = [];
+      targetWormholeZ = [];
+      
+      const particlesPerRing = Math.ceil(numVehicles / WORMHOLE_NUM_RINGS);
+      
+      for (let i = 0; i < numVehicles; i++) {
+        // Which ring this particle belongs to
+        const ringIndex = Math.floor(i / particlesPerRing);
+        // Which particle *within* the ring
+        const particleInRingIndex = i % particlesPerRing;
+        
+        // Calculate position
+        const angle = (particleInRingIndex / particlesPerRing) * TWO_PI;
+        const x = cos(angle) * WORMHOLE_RADIUS;
+        const y = sin(angle) * WORMHOLE_RADIUS;
+        // Spread the z-depth evenly along the tunnel
+        const z = (ringIndex / WORMHOLE_NUM_RINGS) * WORMHOLE_TUNNEL_DEPTH;
+        
+        targetWormholeX.push(x);
+        targetWormholeY.push(y);
+        targetWormholeZ.push(z);
+      }
+      console.log(`Wormhole data generated with ${targetWormholeX.length} points.`);
+    }
+    // --- END NEW ---
+
+
+    // --- DATA GENERATION (Normalized Grid for Code Permanent State) ---
+    window.generateNormalizedGridData = function() {
+      console.log(`Generating normalized grid data for ${numVehicles} particles...`);
+      targetGridX = [];
+      targetGridY = [];
+      
+      const GRID_DIMENSION = 600; 
+      const GRID_COLS = 60; 
+      const totalPoints = numVehicles; 
+      const effective_rows = ceil(totalPoints / GRID_COLS);
+      
+      const spacing_x = GRID_DIMENSION / GRID_COLS; 
+      const start_x = -GRID_DIMENSION / 2; 
+      
+      let count = 0;
+      for (let r = 0; r < effective_rows; r++) {
+          for (let c = 0; c < GRID_COLS; c++) {
+              if (count < totalPoints) {
+                  const x = start_x + c * spacing_x + (spacing_x / 2); 
+                  const norm_r = effective_rows > 1 ? r / (effective_rows - 1) : 0.5;
+                  const y = map(norm_r, 0, 1, -GRID_DIMENSION / 2, GRID_DIMENSION / 2);
+                  
+                  targetGridX.push(x); 
+                  targetGridY.push(y);
+                  count++;
+              } else {
+                  break;
+              }
+          }
+          if (count >= totalPoints) break;
+      }
+      
+      while (targetGridX.length < numVehicles) {
+          targetGridX.push(0); 
+          targetGridY.push(0);
+      }
+
+      console.log(`Normalized grid data regenerated with ${targetGridX.length} points.`);
+    }
+    
+    // --- Button Repositioning ---
+    function repositionButtons() {
+      
+      let buttonY = height - 70; // Moved down 50px (was -120)
+      let buttonW = 180;
+      let buttonH = 30;
+      let spacing = 150; // Reduced spacing for 5 buttons
+      let animButtonRadius = 30; // Base radius for new buttons
+
+      // This function's job is *only* to update positions after a resize.
+      // Creation happens in initializeParticles.
+      // But we check for existence and create them if they are missing, to be safe.
+      if (!animationButton) {
+        animationButton = new AnimatedButton(width / 2 - (spacing * 2), buttonY, animButtonRadius, color(COLOR_MAP['grid_animation']));
+      } else {
+        animationButton.x = width / 2 - (spacing * 2);
+        animationButton.y = buttonY;
+      }
+      
+      if (!codeButton) {
+        codeButton = new AnimatedButton(width / 2 - spacing, buttonY, animButtonRadius, color(COLOR_MAP['grid_code']));
+      } else {
+        codeButton.x = width / 2 - spacing;
+        codeButton.y = buttonY;
+      }
+      
+      // --- NEW: Wormhole Button (Center) ---
+      if (!wormholeButton) {
+        wormholeButton = new AnimatedButton(width / 2, buttonY, animButtonRadius, color(COLOR_MAP['grid_wormhole']));
+      } else {
+        wormholeButton.x = width / 2;
+        wormholeButton.y = buttonY;
+      }
+      // --- END NEW ---
+      
+      if (!designButton) {
+        designButton = new AnimatedButton(width / 2 + spacing, buttonY, animButtonRadius, color(COLOR_MAP['grid_design'])); 
+      } else {
+        designButton.x = width / 2 + spacing;
+        designButton.y = buttonY;
+      }
+      
+      // --- NEW: Extra Button ---
+      if (!extraButton) {
+        extraButton = new AnimatedButton(width / 2 + (spacing * 2), buttonY, animButtonRadius, color(COLOR_MAP['grid_extra']));
+      } else {
+        extraButton.x = width / 2 + (spacing * 2);
+        extraButton.y = buttonY;
+      }
+      // --- END NEW ---
+      
+      if (!backButton) {
+        // --- MODIFIED: Use SpaceButton ---
+        backButton = new SpaceButton(width / 2, 40, buttonW, buttonH, color(255, 255, 255, 255)); 
+      } else {
+        backButton.x = width / 2;
+        backButton.y = 40;
+      }
+    }
+  
+    // --- Centralized Data Initialization ---
+    // This runs in setup() after preload() is complete
+    function initializeParticles() {
+        console.log("Starting particle initialization...");
+        
+        // --- UPDATED: Use robust logic for ALL data files to count points ---
+        
+        // --- Robust Logic for Code Data ---
+        let codeValues = [];
+        if (particleCodeData) {
+            if (Array.isArray(particleCodeData)) {
+                codeValues = particleCodeData;
+            } else if (typeof particleCodeData === 'object' && particleCodeData !== null) {
+                const objectVals = Object.values(particleCodeData);
+                let successfullyAggregated = false;
+                for (const val of objectVals) {
+                    if (Array.isArray(val) && val.length > 0) {
+                        const firstItem = val[0];
+                        if ( (Array.isArray(firstItem) && firstItem.length >= 2) || (typeof firstItem === 'object' && firstItem !== null && 'x' in firstItem && 'y' in firstItem) || (typeof firstItem === 'object' && firstItem !== null && Object.values(firstItem).length >= 3) || (typeof firstItem === 'object' && firstItem !== null && 'X' in firstItem && 'Y' in firstItem) ) {
+                             codeValues = codeValues.concat(val);
+                             successfullyAggregated = true;
+                        }
+                    }
+                }
+                if (!successfullyAggregated) {
+                    const firstVal = objectVals[0];
+                     if (objectVals.length > 0 && typeof firstVal === 'object' && firstVal !== null && ('x' in firstVal && 'y' in firstVal || Object.values(firstVal).length >= 3 || 'X' in firstVal && 'Y' in firstVal)) {
+                        codeValues = objectVals;
+                     }
+                }
+            }
+        }
+        
+        // --- Robust Logic for Animation Data ---
+        let animValues = [];
+        if (particleAnimationData) {
+            if (Array.isArray(particleAnimationData)) {
+                animValues = particleAnimationData;
+            } else if (typeof particleAnimationData === 'object' && particleAnimationData !== null) {
+                const objectVals = Object.values(particleAnimationData);
+                let successfullyAggregated = false;
+                for (const val of objectVals) {
+                    if (Array.isArray(val) && val.length > 0) {
+                        const firstItem = val[0];
+                        if ( (Array.isArray(firstItem) && firstItem.length >= 2) || (typeof firstItem === 'object' && firstItem !== null && 'x' in firstItem && 'y' in firstItem) || (typeof firstItem === 'object' && firstItem !== null && Object.values(firstItem).length >= 3) || (typeof firstItem === 'object' && firstItem !== null && 'X' in firstItem && 'Y' in firstItem) ) {
+                             animValues = animValues.concat(val);
+                             successfullyAggregated = true;
+                        }
+                    }
+                }
+                if (!successfullyAggregated) {
+                    const firstVal = objectVals[0];
+                     if (objectVals.length > 0 && typeof firstVal === 'object' && firstVal !== null && ('x' in firstVal && 'y' in firstVal || Object.values(firstVal).length >= 3 || 'X' in firstVal && 'Y' in firstVal)) {
+                        animValues = objectVals;
+                     }
+                }
+            }
+        }
+        
+        // --- Robust Logic for Design Data ---
+        let designValues = [];
+        if (particleDesignData) {
+            if (Array.isArray(particleDesignData)) {
+                designValues = particleDesignData; // It's a raw array
+            } else if (typeof particleDesignData === 'object' && particleDesignData !== null) {
+                // It's an object, possibly with multiple paths
+                const objectVals = Object.values(particleDesignData);
+                let successfullyAggregated = false;
+                
+                for (const val of objectVals) {
+                    // Check if this value is an array of points
+                    if (Array.isArray(val) && val.length > 0) {
+                        // Check if the first item looks like a point
+                        const firstItem = val[0];
+                        if ( (Array.isArray(firstItem) && firstItem.length >= 2) || (typeof firstItem === 'object' && firstItem !== null && 'x' in firstItem && 'y' in firstItem) ) {
+                             designValues = designValues.concat(val); // <-- FIX: Concat, don't just assign and break
+                             successfullyAggregated = true;
+                        }
+                    }
+                }
+                
+                // Fallback: If we didn't aggregate any arrays (maybe it's a flat object of points like {"0": {x,y}, ...})
+                if (!successfullyAggregated) {
+                     // Check if the *first value* of the object (not the array) looks like a point object
+                    const firstVal = objectVals[0];
+                     if (objectVals.length > 0 && typeof firstVal === 'object' && firstVal !== null && 'x' in firstVal && 'y' in firstVal) {
+                        designValues = objectVals; // Assume format { "0": {x,y}, "1": {x,y} }
+                     } else {
+                        console.warn("Design data is an object, but couldn't find point arrays to aggregate.");
+                     }
+                }
+            }
+        }
+        // --- END ROBUST LOGIC ---
+
+        const codeLen = codeValues.length;
+        const animLen = animValues.length;
+        const designLen = designValues.length; // This should now be 2261
+
+        const allLengths = [];
+        if (codeLen > 0) allLengths.push(codeLen);
+        if (animLen > 0) allLengths.push(animLen);
+        if (designLen > 0) allLengths.push(designLen);
+
+        if (allLengths.length > 0) {
+            numVehicles = max(allLengths); // <-- FIX: Changed min() to max()
+        } else {
+            console.warn("No JSON data loaded! Using fallback count.");
+            numVehicles = FALLBACK_POINT_COUNT; 
+        }
+
+        console.log(`All data loaded. Using largest count: ${numVehicles} particles.`);
+        
+        // 2. Load all targets (this now truncates all data to numVehicles)
+        loadCodeData();
+        loadAnimationWordData();
+        loadDesignData(); // <-- New JSON loader
+        generateCircleData(); // This is still needed for hover effects
+        generateNormalizedGridData(); 
+        generateConcentricCircleData(); 
+        generateAnimationRectData(); 
+        generateWormholeData(); // <-- NEW
+        
+        // 3. Create vehicles 
+        loadVehicles();
+        
+        // 4. Create the buttons
+        let buttonY = height - 70; // <-- FIX: Was height - 120
+    let buttonW = 180;
+    let buttonH = 30;
+    let spacing = 150; // Reduced spacing for 5 buttons
+    let animButtonRadius = 30; // Base radius for new buttons
+    
+    animationButton = new AnimatedButton(width / 2 - (spacing * 2), buttonY, animButtonRadius, color(COLOR_MAP['grid_animation']));
+    codeButton = new AnimatedButton(width / 2 - spacing, buttonY, animButtonRadius, color(COLOR_MAP['grid_code']));
+    wormholeButton = new AnimatedButton(width / 2, buttonY, animButtonRadius, color(COLOR_MAP['grid_wormhole'])); // <-- NEW
+    designButton = new AnimatedButton(width / 2 + spacing, buttonY, animButtonRadius, color(COLOR_MAP['grid_design'])); 
+    extraButton = new AnimatedButton(width / 2 + (spacing * 2), buttonY, animButtonRadius, color(COLOR_MAP['grid_extra'])); // <-- NEW
+    // --- MODIFIED: Use SpaceButton ---
+    backButton = new SpaceButton(width / 2, 40, buttonW, buttonH, color(255, 255, 255, 255)); 
+    
+    rectMode(CENTER);
+    textAlign(CENTER);
+        scale = 1.5;
+        
+        // Start the main draw loop 
+        window.isInitialized = true;
+    }
+    // --- END NEW ---
+
+    // setup() runs *after* preload()
+    function setup() {
+      // Create the canvas and parent it to the p5-canvas-container
+      let p5Canvas = createCanvas(windowWidth, windowHeight);
+      p5Canvas.parent('p5-canvas-container'); // <-- FIX: Changed from querySelector('main')
+      
+      // By now, all JSON files in preload() are finished loading.
+      // We can safely initialize everything.
+      initializeParticles(); 
+      updateVideoSize(); // <-- NEW: Size the video on initial setup
+      
+      // --- NEW: Start the portal video (since we start in circle mode) ---
+      const portalImage = document.getElementById('portal-image');
+      if (portalImage) {
+        portalImage.style.display = 'block';
+      }
+      // --- END NEW ---
+      
+      // --- NEW: Theme Toggle Event Listener ---
+      const themeToggle = document.getElementById('theme-toggle-input');
+      if (themeToggle) {
+        themeToggle.addEventListener('change', function() {
+            isLightTheme = this.checked;
+            document.body.classList.toggle('light-theme', isLightTheme);
+        });
+      }
+      // --- END NEW ---
+      
+      noiseDetail(8, 0.5); 
+      // noFill(); // <-- REMOVED: No longer needed for rings
+    }
+
+    function loadVehicles() {
+      // Create one vehicle for each data point
+      for (var j = 0; j < numVehicles; j++) {
+        // Start them at random positions
+        var v = new Vehicle(random(width), random(height), random(1, 7));
+        vehicles.push(v);
+      }
+    }
+
+    function resetToCircleMode() {
+        currentFormation = 'circle';
+        animationButton.isActive = false;
+        codeButton.isActive = false;
+        designButton.isActive = false;
+        wormholeButton.isActive = false; // <-- NEW
+        extraButton.isActive = false;    // <-- NEW
+        particleTargetColor = COLOR_MAP['circle'];
+        
+        // --- NEW: Hide animation video ---
+        const video = document.getElementById('animation-video');
+        if (video) {
+          video.style.display = 'none';
+          video.pause();
+          video.currentTime = 0;
+        }
+        
+        // --- NEW: Show portal video ---
+        const portalImage = document.getElementById('portal-image');
+        if (portalImage) {
+          portalImage.style.display = 'block';
+        }
+        // --- END NEW ---
+        
+        // --- NEW: Reset extra color lerp ---
+        for (const v of vehicles) {
+            v.extraCurrentColor = [0,0,0]; 
+        }
+        // --- END NEW ---
+        
+        // NEW: Ensure logo is white
+        document.getElementById('logo-svg').classList.remove('black');
+        
+        console.log("Reset to 'circle' mode.");
+    }
+    
+    function setGridMode(mode) {
+        currentFormation = mode;
+        particleTargetColor = COLOR_MAP[mode];
+
+        animationButton.isActive = (mode === 'grid_animation');
+        codeButton.isActive = (mode === 'grid_code');
+        designButton.isActive = (mode === 'grid_design');
+        wormholeButton.isActive = (mode === 'grid_wormhole'); // <-- NEW
+        extraButton.isActive = (mode === 'grid_extra');    // <-- NEW
+        
+        // --- NEW: Hide portal video ---
+        const portalImage = document.getElementById('portal-image');
+        if (portalImage) {
+          portalImage.style.display = 'none';
+        }
+        // --- END NEW ---
+        
+        // --- NEW: Video Control ---
+        const video = document.getElementById('animation-video');
+        if (video) {
+          if (mode === 'grid_animation') {
+            video.style.display = 'block';
+            video.play();
+          } else {
+            video.style.display = 'none';
+            video.pause();
+            video.currentTime = 0;
+          }
+        }
+        // --- END NEW ---
+        
+        // --- NEW: Reset extra color lerp if not extra mode ---
+        if (mode !== 'grid_extra') {
+            for (const v of vehicles) {
+                v.extraCurrentColor = [0,0,0]; 
+            }
+        }
+        // --- END NEW ---
+        
+        // NEW: Handle logo color
+        const logo = document.getElementById('logo-svg');
+        if (mode === 'grid_extra') {
+          logo.classList.add('black');
+        } else {
+          logo.classList.remove('black');
+        }
+
+        for (const v of vehicles) {
+            v.sizeWord();
+        }
+        console.log(`Switched to permanent '${mode}' mode.`);
+    }
+
+    function mousePressed() {
+      if (!window.isInitialized) return;
+
+      if (backButton && backButton.isHovered()) {
+        resetToCircleMode();
+        return;
+      }
+      
+      if (animationButton && animationButton.isHovered() && currentFormation !== 'grid_animation') {
+          setGridMode('grid_animation');
+      } else if (codeButton && codeButton.isHovered() && currentFormation !== 'grid_code') {
+          setGridMode('grid_code');
+      } else if (designButton && designButton.isHovered() && currentFormation !== 'grid_design') {
+          setGridMode('grid_design');
+      } else if (wormholeButton && wormholeButton.isHovered() && currentFormation !== 'grid_wormhole') { // <-- NEW
+          setGridMode('grid_wormhole');
+      } else if (extraButton && extraButton.isHovered() && currentFormation !== 'grid_extra') { // <-- NEW
+          setGridMode('grid_extra');
+      }
+    }
+    
+    window.onresize = function() {
+      if (!window.isInitialized) return;
+      
+      resizeCanvas(window.innerWidth, window.innerHeight);
+      repositionButtons();
+      
+      generateNormalizedGridData(); 
+      generateConcentricCircleData();
+      generateAnimationRectData();
+      generateWormholeData(); // <-- NEW
+      updateVideoSize(); // <-- NEW: Resize the video on window resize
+      normalizeDesignData(); // Re-normalize if needed (though not strictly necessary)
+    };
+
+
+    function draw() {
+      if (!window.isInitialized) {
+          background(0);
+          fill(255);
+          textAlign(CENTER, CENTER);
+          textSize(32);
+          text("Loading Particle Data...", width / 2, height / 2);
+          return;
+      }
+      
+      // --- NEW: Handle background lerp for 'extra' mode ---
+      if (currentFormation === 'grid_extra') {
+          extraBackgroundLerp = lerp(extraBackgroundLerp, 1, 0.05); 
+      } else {
+          extraBackgroundLerp = lerp(extraBackgroundLerp, 0, 0.05);
+      }
+      // --- END NEW ---
+      
+      for (let i = 0; i < 4; i++) {
+          particleCurrentColor[i] = lerp(particleCurrentColor[i], particleTargetColor[i], 0.05);
+      }
+      
+      // --- MODIFIED: Handle transparent background for circle/portal mode ---
+      if (currentFormation === 'circle' || currentFormation === 'grid_animation') {
+          clear(); // Makes the canvas transparent so video shows through
+      } else {
+          // --- UPDATED to handle new theme toggle ---
+          let bgR, bgG, bgB;
+          if (isLightTheme) {
+              bgR = 245; bgG = 245; bgB = 245; // Default light theme
+          } else {
+              bgR = 32; bgG = 32; bgB = 32; // Default dark theme
+          }
+          
+          // 'extra' mode fade overrides the theme
+          let finalR = lerp(bgR, 255, extraBackgroundLerp);
+          let finalG = lerp(bgG, 255, extraBackgroundLerp);
+          let finalB = lerp(bgB, 255, extraBackgroundLerp);
+          
+          if (extraBackgroundLerp > 0.01) { // If we are in or transitioning to/from extra mode
+              background(finalR, finalG, finalB); // Solid color
+          } else {
+              background(finalR, finalG, finalB, 40); // Theme color with trail effect
+          }
+      }
+      // --- END MODIFIED ---
+      
+      scale = 0.5 * width / 540;
+      
+      // --- MODIFIED: Slower oscillation speed ---
+      let oscillationSpeed = 0.005; // Reduced from 0.08
+      let oscillationAmplitude = 0; 
+      let defaultOffsetY = sin(frameCount * oscillationSpeed) * oscillationAmplitude; // Renamed to default
+      formationOffsetY = defaultOffsetY; // Default
+      // --- END MODIFIED ---
+
+      // --- NEW: Animate wormhole Z offset ---
+      if (currentFormation === 'grid_wormhole') {
+        wormholeOffsetZ = (wormholeOffsetZ + 1.5) % WORMHOLE_TUNNEL_DEPTH; // Speed of tunnel
+      }
+      
+      // --- MODIFIED: Hover preview only triggers if it's NOT the active scene ---
+      let isHoveringAnimation = animationButton && animationButton.isHovered() && currentFormation !== 'grid_animation';
+      let isHoveringCode = codeButton && codeButton.isHovered() && currentFormation !== 'grid_code';
+      let isHoveringDesign = designButton && designButton.isHovered() && currentFormation !== 'grid_design';
+      let isHoveringWormhole = wormholeButton && wormholeButton.isHovered() && currentFormation !== 'grid_wormhole'; // <-- NEW
+      let isHoveringExtra = extraButton && extraButton.isHovered() && currentFormation !== 'grid_extra';       // <-- NEW
+      // --- END MODIFICATION ---
+      
+      // --- NEW: Check if *any* button is hovered ---
+      const isAnyHover = isHoveringAnimation || isHoveringCode || isHoveringDesign || isHoveringWormhole || isHoveringExtra;
+      
+      // --- MODIFIED: Color is only overridden if we are in a grid mode AND not hovering, AND it's not animation mode ---
+      const particleColorShouldBeOverriden = currentFormation.startsWith('grid') && 
+                                             !isAnyHover && 
+                                             currentFormation !== 'grid_animation';
+      // --- END MODIFIED ---
+
+      // --- NEW: Calculate the Y offset to be used *for this frame* ---
+      let currentGlobalOffsetY = formationOffsetY; // Start with default
+      if (isAnyHover && currentFormation === 'grid_animation') {
+          // A button is hovered AND we're in video mode
+          // Calculate the offset to place words above the video
+          // Place center 100px above video top
+          currentGlobalOffsetY = videoTopY - (height / 2) - 100; 
+      }
+      // --- END NEW ---
+
+      // --- MODIFIED: REMOVED MAIN IF/ELSE SPLIT ---
+      // --- Particle loop now runs for all modes.
+      for (var i = 0; i < vehicles.length; i++) {
+        var v = vehicles[i];
+        
+        v.isWordParticle = false; // <-- NEW: Reset flag for this frame
+        
+        let target_x, target_y;
+        
+        v.setScale(1.0); // Reset projection scale by default
+        
+        const getTargetIndex = (index, length) => index % length;
+
+
+        // --- UPDATED: Morphing Logic based on currentFormation state ---
+        // --- We now check for hovers FIRST, before checking the permanent state ---
+        
+        if (isHoveringAnimation) {
+            // --- NEW: 3/4 of particles form word, 1/4 orbit ---
+            if (i % 4 !== 0) { // <-- MODIFIED: Was i % 4 === 0
+                v.isWordParticle = true; // <-- NEW: Flag as word particle
+                v.sizeWord();
+                const animationIndex = getTargetIndex(i, targetAnimationWordX.length);
+                target_x = targetAnimationWordX[animationIndex] * scale + width / 2;
+                target_y = targetAnimationWordY[animationIndex] * scale + height / 2 + currentGlobalOffsetY; // USE NEW OFFSET
+            } else {
+                v.sizeBall();
+                const circleIndex = getTargetIndex(i, targetCircleX.length);
+                const squigX = sin(frameCount / 10000.0 * i);
+                const squigY = cos(frameCount / 20000.0 * i);
+                // Use a smaller radius for the cloud
+                target_x = targetCircleX[circleIndex] * squigX * scale * 0.8 + width / 2;
+                target_y = targetCircleY[circleIndex] * squigY * scale * 0.8 + height / 2 + currentGlobalOffsetY;
+            }
+            // --- END NEW ---
+        
+        } else if (isHoveringCode) {
+            // --- NEW: 3/4 of particles form word, 1/4 orbit ---
+            if (i % 4 !== 0) { // <-- MODIFIED: Was i % 4 === 0
+                v.isWordParticle = true; // <-- NEW: Flag as word particle
+                v.sizeWord(); 
+                const codeIndex = getTargetIndex(i, targetCodeX.length);
+                target_x = targetCodeX[codeIndex] * scale + width / 2;
+                target_y = targetCodeY[codeIndex] * scale + height / 2 + currentGlobalOffsetY; // USE NEW OFFSET
+            } else {
+                v.sizeBall();
+                const circleIndex = getTargetIndex(i, targetCircleX.length);
+                const squigX = sin(frameCount / 10000.0 * i);
+                const squigY = cos(frameCount / 20000.0 * i);
+                target_x = targetCircleX[circleIndex] * squigX * scale * 0.8 + width / 2;
+                target_y = targetCircleY[circleIndex] * squigY * scale * 0.8 + height / 2 + currentGlobalOffsetY;
+            }
+            // --- END NEW ---
+        
+        } else if (isHoveringDesign) { 
+            // --- NEW: 3/4 of particles form word, 1/4 orbit ---
+            if (i % 4 !== 0) { // <-- MODIFIED: Was i % 4 === 0
+                v.isWordParticle = true; // <-- NEW: Flag as word particle
+                v.sizeWord();
+                const designIndex = getTargetIndex(i, targetDesignWordX.length); 
+                target_x = targetDesignWordX[designIndex] * SVG_VIEW_SCALE + width / 2; // Using SVG_VIEW_SCALE for consistent hover
+                target_y = targetDesignWordY[designIndex] * SVG_VIEW_SCALE + height / 2 + currentGlobalOffsetY; // USE NEW OFFSET
+            } else {
+                v.sizeBall();
+                const circleIndex = getTargetIndex(i, targetCircleX.length);
+                const squigX = sin(frameCount / 10000.0 * i);
+                const squigY = cos(frameCount / 20000.0 * i);
+                target_x = targetCircleX[circleIndex] * squigX * scale * 0.8 + width / 2;
+                target_y = targetCircleY[circleIndex] * squigY * scale * 0.8 + height / 2 + currentGlobalOffsetY;
+            }
+            // --- END NEW ---
+        
+        } else if (isHoveringWormhole) { // <-- NEW HOVER
+            // --- NEW: 3/4 of particles form word, 1/4 orbit ---
+            // For this one, the "word" is just the tighter portal shape
+            if (i % 4 !== 0) { // <-- MODIFIED: Was i % 4 === 0
+                v.isWordParticle = true; // <-- NEW: Flag as word particle
+                v.sizeBall(); 
+                const circleIndex = getTargetIndex(i, targetCircleX.length);
+                const squigX = sin(frameCount / 10000.0 * i);
+                const squigY = cos(frameCount / 20000.0 * i);
+                target_x = targetCircleX[circleIndex] * squigX * scale + width / 2;
+                target_y = targetCircleY[circleIndex] * squigY * scale + height / 2 + currentGlobalOffsetY; // USE NEW OFFSET
+            } else {
+                v.sizeBall();
+                const circleIndex = getTargetIndex(i, targetCircleX.length);
+                const squigX = sin(frameCount / 10000.0 * i);
+                const squigY = cos(frameCount / 20000.0 * i);
+                // Use a slightly larger radius for the cloud
+                target_x = targetCircleX[circleIndex] * squigX * scale * 1.2 + width / 2;
+                target_y = targetCircleY[circleIndex] * squigY * scale * 1.2 + height / 2 + currentGlobalOffsetY;
+            }
+            // --- END NEW ---
+
+        } else if (isHoveringExtra) { // <-- NEW HOVER
+            // --- NEW: 3/4 of particles form word, 1/4 orbit ---
+            // Same as wormhole hover
+            if (i % 4 !== 0) { // <-- MODIFIED: Was i % 4 === 0
+                v.isWordParticle = true; // <-- NEW: Flag as word particle
+                v.sizeBall(); 
+                const circleIndex = getTargetIndex(i, targetCircleX.length);
+                const squigX = sin(frameCount / 10000.0 * i);
+                const squigY = cos(frameCount / 20000.0 * i);
+                target_x = targetCircleX[circleIndex] * squigX * scale + width / 2;
+                target_y = targetCircleY[circleIndex] * squigY * scale + height / 2 + currentGlobalOffsetY; // USE NEW OFFSET
+            } else {
+                v.sizeBall();
+                const circleIndex = getTargetIndex(i, targetCircleX.length);
+                const squigX = sin(frameCount / 10000.0 * i);
+                const squigY = cos(frameCount / 20000.0 * i);
+                target_x = targetCircleX[circleIndex] * squigX * scale * 1.2 + width / 2;
+                target_y = targetCircleY[circleIndex] * squigY * scale * 1.2 + height / 2 + currentGlobalOffsetY;
+            }
+            // --- END NEW ---
+            
+        } else if (currentFormation === 'grid_design') {
+            // --- No hover, so show permanent grid mode ---
+            v.sizeWord();
+            const designCircleIndex = getTargetIndex(i, targetDesignCirclesX.length);
+            target_x = targetDesignCirclesX[designCircleIndex] * scale + width / 2; 
+            target_y = targetDesignCirclesY[designCircleIndex] * scale + height / 2 + formationOffsetY; // Uses default
+            
+        } else if (currentFormation === 'grid_animation') {
+            // --- No hover, so show permanent grid mode ---
+            v.sizeWord(); 
+            const animationRectIndex = getTargetIndex(i, targetAnimationRectX.length);
+            target_x = targetAnimationRectX[animationRectIndex] * scale + width / 2;
+            target_y = targetAnimationRectY[animationRectIndex] * scale + height / 2 + formationOffsetY; // Uses default
+
+        } else if (currentFormation === 'grid_code') {
+            // --- No hover, so show permanent grid mode ---
+            v.sizeWord(); 
+            
+            const gridIndex = getTargetIndex(i, targetGridX.length);
+            const base_x_norm = targetGridX[gridIndex];
+            const base_y_norm = targetGridY[gridIndex];
+
+            const time = frameCount * 0.005;
+            const z_height = map(noise(base_x_norm * 0.004, base_y_norm * 0.004 + time * 0.5), 0, 1, -100, 100); 
+            
+            const X_SCREEN_SCALE = width / 600; 
+            target_x = base_x_norm * X_SCREEN_SCALE + width / 2;
+
+            const Y_SCREEN_SCALE = height / 600; 
+            let base_screen_y = base_y_norm * Y_SCREEN_SCALE + height / 2;
+            
+            const height_offset_scaled = z_height * 0.15; 
+            target_y = base_screen_y + height_offset_scaled + formationOffsetY; // Uses default
+            
+        } else if (currentFormation === 'grid_wormhole') { // <-- NEW FORMATION
+            v.sizeWord();
+            const wormholeIndex = getTargetIndex(i, targetWormholeX.length);
+            
+            const base_x = targetWormholeX[wormholeIndex];
+            const base_y = targetWormholeY[wormholeIndex];
+            const base_z = targetWormholeZ[wormholeIndex];
+            
+            // Animate Z position
+            let z_animated = (base_z + wormholeOffsetZ) % WORMHOLE_TUNNEL_DEPTH;
+            
+            // 3D Projection
+            let projectionScale = WORMHOLE_FOV / (WORMHOLE_FOV + z_animated);
+            
+            target_x = base_x * projectionScale + width / 2;
+            target_y = base_y * projectionScale + height / 2;
+            
+            v.setScale(projectionScale * 1.5); // Pass scale to vehicle for size/alpha
+            
+        } else if (currentFormation === 'grid_extra') { // <-- NEW FORMATION: White Screen
+            v.sizeWord(); 
+            
+            const gridIndex = getTargetIndex(i, targetGridX.length);
+            const base_x_norm = targetGridX[gridIndex];
+            const base_y_norm = targetGridY[gridIndex];
+
+            const X_SCREEN_SCALE = width / 600; 
+            target_x = base_x_norm * X_SCREEN_SCALE + width / 2;
+
+            const Y_SCREEN_SCALE = height / 600; 
+            let base_screen_y = base_y_norm * Y_SCREEN_SCALE + height / 2;
+            
+            target_y = base_screen_y + formationOffsetY; // Uses default
+
+        } else { 
+            // --- RE-ADDED: This is the particle portal logic ---
+            v.sizeBall(); 
+            const circleIndex = getTargetIndex(i, targetCircleX.length);
+            const squigX = sin(frameCount / 10000.0 * i);
+            const squigY = cos(frameCount / 20000.0 * i);
+            target_x = targetCircleX[circleIndex] * squigX * scale + width / 2;
+            target_y = targetCircleY[circleIndex] * squigY * scale + height / 2 + formationOffsetY; // Uses default
+        }
+        
+        v.update(target_x, target_y);
+        // 'particleColorShouldBeOverriden' is true for grid modes (except animation), false for portal/hover
+        // v.show(particleColorShouldBeOverriden); // <-- OLD CALL
+        
+        // --- NEW: Draw order logic ---
+        if (isAnyHover) {
+            // We are in a hover preview.
+            // Only draw the CLOUD particles (1/4) in this first pass.
+            if (i % 4 === 0) {
+                v.show(false); // Cloud particles are never color-overridden
+            }
+            // Word particles (i % 4 !== 0) are skipped here and drawn in a second pass.
+        } else {
+            // Not in a hover preview, draw as normal.
+            v.show(particleColorShouldBeOverriden);
+        }
+        // --- END NEW ---
+        
+        v.behaviors();
+
+        /* --- COMMENTED OUT FOR PERFORMANCE ---
+        const neighborsToConnect = 1; 
+        const maxLineDist = 260; 
+        for (let j = 1; j <= neighborsToConnect; j++) {
+            let neighborIndex = (i + j) % vehicles.length; 
+            let neighbor = vehicles[neighborIndex];
+            let d = dist(v.position.x, v.position.y, neighbor.position.x, neighbor.position.y);
+            if (d < maxLineDist) {
+                let lineAlpha = map(d, 0, maxLineDist, 200, 0); 
+                let lineColor = particleColorShouldBeOverriden ? 
+                                  color(particleCurrentColor[0], particleCurrentColor[1], particleCurrentColor[2], lineAlpha) : 
+                                  color(255, lineAlpha); 
+                stroke(lineColor);
+                strokeWeight(1); 
+                line(v.position.x, v.position.y, neighbor.position.x, neighbor.position.y);
+            }
+        }
+        --- END COMMENT OUT --- */
+      }
+      // --- END MODIFIED: REMOVED MAIN IF/ELSE SPLIT ---
+
+      // --- NEW: Second Draw Pass for Word Particles ---
+      // This loop runs *after* all cloud particles have been drawn,
+      // ensuring word particles are drawn on top during a hover.
+      if (isAnyHover) {
+          for (var i = 0; i < vehicles.length; i++) {
+              // Check if it's a word particle
+              if (i % 4 !== 0) {
+                  var v = vehicles[i];
+                  v.show(false); // Word particles are never color-overridden
+              }
+          }
+      }
+      // --- END NEW ---
+
+
+      // --- NEW: Draw Top Header Bar ---
+      push();
+      rectMode(CENTER);
+      
+      // Set bar color based on theme
+      if (isLightTheme) {
+        fill(230, 230, 230, 200); // Light grey, semi-transparent
+      } else {
+        fill(50, 50, 50, 150); // Dark grey, semi-transparent
+      }
+      
+      noStroke();
+      // Positioned at the top, height 80 (to match bottom)
+      // Y-center is 40, which is where the backButton is
+      rect(width / 2, 40, width - 40, 80, 10); 
+      pop();
+      // --- END NEW ---
+
+      // --- NEW: Draw button bar first ---
+      push();
+      rectMode(CENTER);
+      
+      // --- MODIFIED: Set bar color based on theme ---
+      if (isLightTheme) {
+        fill(230, 230, 230, 200); // Light grey, semi-transparent
+      } else {
+        fill(50, 50, 50, 150); // Dark grey, semi-transparent
+      }
+      // --- END MODIFIED ---
+      
+      noStroke();
+      // Positioned just above the buttons, height 80 (40px above/below button center)
+      rect(width / 2, height - 70, width - 40, 80, 10); // Moved down 50px (was -120)
+      pop();
+      // --- END NEW ---
+
+      if (backButton) backButton.show();
+      if (animationButton) animationButton.show();
+      if (codeButton) codeButton.show();
+      if (wormholeButton) wormholeButton.show(); // <-- NEW
+      if (designButton) designButton.show();
+      if (extraButton) extraButton.show();       // <-- NEW
+
+      // --- Debug Text ---
+      push();
+      textSize(20);
+      fill(255, 100);
+      noStroke();
+      let displayMode = currentFormation.replace('grid_', '').toUpperCase();
+      
+      // --- MODIFIED: Updated display text for new portal ---
+      if (currentFormation === 'circle') {
+          displayMode = 'PORTAL MODE (HOVER FOR PREVIEW)';
+      } else if (currentFormation === 'grid_design') {
+          displayMode = 'DESIGN CIRCLES';
+      } else if (currentFormation === 'grid_animation') {
+          displayMode = 'ANIMATION SCREENS (CONCENTRIC)';
+      } else if (currentFormation === 'grid_code') {
+          displayMode = 'CODE TERRAIN (ANIMATED GRID)';
+      } else if (currentFormation === 'grid_wormhole') { // <-- NEW. FIX: Was 'currentFormation ===G'
+          displayMode = 'WORMHOLE TUNNEL (3D)';
+      } else if (currentFormation === 'grid_extra') { // <-- NEW
+          displayMode = 'WHITE SCREEN FADE';
+      }
+      // --- END MODIFIED ---
+      
+      // --- We hide the debug text if the buttons are overlapping it
+      if (height > 300) {
+        // text(`Mode: ${displayMode}`, width / 2, height - 120); // 50px down (was -170)
+        // text("FPS: " + int(frameRate()), width / 2, height - 95); // 50px down (was -145)
+      }
+      
+      pop();
+    }
+
+    // ===============================================
+    // VEHICLE CLASS (Particle)
+    // ===============================================
+    function Vehicle(x, y, r) {
+      this.position = createVector(x, y);
+      this.velocity = createVector(0, 0);
+      this.acceleration = createVector(0, 0);
+      this.mouse = createVector(mouseX, mouseY);
+      this.sizeL = 1;
+      this.sizeH = 4;
+      this.sizeL2 = 1;
+      this.sizeH2 = 4;
+      this.projectionScale = 1.0; // <-- NEW: For 3D scaling
+      this.extraCurrentColor = [0, 0, 0]; // <-- NEW: For 'extra' mode lerp
+      this.isWordParticle = false; // <-- NEW: Flag for hover previews
+
+      this.maxSpeed = random(11, 12);
+      this.maxForce = this.maxSpeed * 0.05;
+
+      this.r = r;
+    }
+
+    Vehicle.prototype.update = function (x, y, z) {
+      this.position.add(this.velocity);
+      this.velocity.add(this.acceleration);
+      this.acceleration.mult(0);
+
+      this.target = createVector(x, y, z);
+
+      this.sizeL = lerp(this.sizeL, this.sizeL2, 0.05);
+      this.sizeH = lerp(this.sizeH, this.sizeH2, 0.05);
+    }
+    
+    // --- NEW: Set scale from 3D projection ---
+    Vehicle.prototype.setScale = function (scale) {
+      this.projectionScale = scale;
+    }
+
+    Vehicle.prototype.sizeBall = function () {
+      this.sizeL2 = 0;
+      this.sizeH2 = 10;
+    }
+    Vehicle.prototype.sizeWord = function () {
+      this.sizeL2 = 4;
+      this.sizeH2 = 4;
+    }
+    
+    // NEW: Size function for the 'extra' (white screen) mode
+    Vehicle.prototype.sizeExtra = function () {
+      this.sizeL2 = 25; // Target large ellipse size
+      this.sizeH2 = 25; // Target large ellipse size
+    }
+
+    Vehicle.prototype.show = function (isColorOverriden) {
+      var origin = createVector(width / 2, height / 2)
+      var vel = this.velocity.mag();
+      var distance = origin.sub(this.position);
+      var distMag = distance.mag();
+
+      var size; // Size will be set inside the logic
+
+      push();
+      noStroke();
+      translate(this.position.x, this.position.y);
+      
+      if (isColorOverriden) {
+          // This block is for: grid_code, grid_design, grid_wormhole, grid_extra
+          
+          if (currentFormation === 'grid_extra') {
+              // --- NEW: White Screen Effect ---
+              // Lerp color to white
+              this.extraCurrentColor[0] = lerp(this.extraCurrentColor[0], 255, 0.05);
+              this.extraCurrentColor[1] = lerp(this.extraCurrentColor[1], 255, 0.05);
+              this.extraCurrentColor[2] = lerp(this.extraCurrentColor[2], 255, 0.05);
+              fill(this.extraCurrentColor[0], this.extraCurrentColor[1], this.extraCurrentColor[2], 255);
+              
+              // --- MODIFIED: Draw a lerping ellipse instead of a rect ---
+              // this.sizeL is lerping towards this.sizeL2 (25) in v.update()
+              let size = this.sizeL;
+              ellipse(0, 0, size, size);
+              // --- END MODIFICATION ---
+              
+          } else {
+              // --- Normal grid color logic for other grid modes ---
+              fill(particleCurrentColor[0], particleCurrentColor[1], particleCurrentColor[2], particleCurrentColor[3]);
+              
+              // --- MODIFICATION: Adjust sizes for different modes ---
+              if (currentFormation === 'grid_code') {
+                size = this.sizeL * this.projectionScale * 1.0; // Halved from 2.0
+              } else if (currentFormation === 'grid_design') {
+                size = this.sizeL * this.projectionScale * 1.0; // Halved from 2.0
+              } else {
+                size = this.sizeL * this.projectionScale * 2.0; // Default
+              }
+              // --- END MODIFICATION ---
+              
+              ellipse(0, 0, size, size);
+          }
+          
+      } else {
+          // This 'else' block is for:
+          // 1. 'circle' (portal) mode
+          // 2. 'grid_animation' mode
+          // 3. All button hover previews
+          
+          let colR, colG, colB, alpha, size;
+          
+          if (this.isWordParticle) {
+              // --- NEW: WORD PARTICLE (3/4) ---
+              // Solid white (or dark on light theme)
+              if (isLightTheme) {
+                fill(50, 50, 50, 255); // Dark grey
+              } else {
+                fill(255, 255, 255, 255); // White
+              }
+              size = map(distMag, 100, 0, this.sizeL, this.sizeH);
+              
+          } else {
+              // --- NEW: CLOUD PARTICLE (1/4) or PORTAL/ANIMATION PARTICLE ---
+              
+              if (isLightTheme) {
+                // MODIFIED: More desaturated blue/grey for light theme
+                colR = map(this.velocity.x, 0, 10, 100, 50); // Less red
+                colG = map(this.velocity.y, 0, 10, 120, 100); // Less green
+                colB = map(vel, 0, 10, 150, 120); // Less blue, shifted towards grey
+              } else {
+                // Original range
+                colR = map(this.velocity.x, 0, 10, 230, 51);
+                colG = map(this.velocity.y, 0, 10, 220, 151);
+                colB = map(vel, 0, 10, 250, 134);
+              }
+              
+              // Check if we are a hover-cloud particle (isWordParticle is false, but any hover is active)
+              const isAnyHover = isHoveringAnimation || isHoveringCode || isHoveringDesign || isHoveringWormhole || isHoveringExtra;
+              
+              if (isAnyHover) {
+                  // This is a CLOUD particle during a hover
+                  alpha = map(vel, 0, 20, 100, 0); // 50% opacity (max 100)
+                  size = map(distMag, 100, 0, this.sizeL, this.sizeH) * 0.5; // 50% size
+              } else {
+                  // This is a normal PORTAL or ANIMATION particle
+                  alpha = map(vel, 0, 20, 200, 00); // Full opacity
+                  size = map(distMag, 100, 0, this.sizeL, this.sizeH);
+              }
+
+              fill(colR * 0.96 - 50 - 20, colG * 0.98 - 20, colB * 1.3 + 50 - 20, alpha);
+              
+              // --- MODIFIED: Double size for animation grid ---
+              if (currentFormation === 'grid_animation' && !isAnyHover) { // Only if not hovering
+                  size *= 2.0; 
+              }
+          }
+          
+          // Torsion effect for hover previews and portal
+          let rotationFactor = map(distMag, 0, 250, 0.05, 0.005); 
+          rotate(frameCount * rotationFactor);
+          ellipse(0, 0, size, size);
+      }
+      
+      pop();
+    }
+
+    Vehicle.prototype.flee = function (target) {
+      var desired = p5.Vector.sub(target, this.position);
+      var distance = desired.mag();
+      if (distance < 100) {
+        desired.setMag(this.maxSpeed);
+        desired.mult(-1);
+        var steer = p5.Vector.sub(desired, this.velocity);
+        steer.limit(this.maxForce);
+
+        return steer;
+      }
+      return createVector(0, 0);
+    }
+
+    Vehicle.prototype.arrive = function (target) {
+      var desired = p5.Vector.sub(target, this.position);
+      var distance = desired.mag();
+      var speed = this.maxSpeed;
+      if (distance < 500) {
+        speed = map(distance, 0, 100, 0, this.maxSpeed);
+      }
+      desired.setMag(speed);
+      var steer = p5.Vector.sub(desired, this.velocity);
+      steer.limit(this.maxForce);
+      return steer;
+    }
+
+    Vehicle.prototype.behaviors = function () {
+      var arrive = this.arrive(this.target);
+      var mouse = createVector(mouseX, mouseY);
+      var flee = this.flee(mouse);
+
+      arrive.mult(1);
+      flee.mult(2);
+
+      this.applyForce(arrive);
+      this.applyForce(flee);
+    }
+
+    Vehicle.prototype.applyForce = function (force) {
+      this.acceleration.add(force);
+    }
+
+    Vehicle.prototype.edges = function () {
+      if (this.position.x <= -width / 2 || this.position.x >= width / 2) {
+        this.velocity.x *= -1;
+      }
+      if (this.position.y <= -height / 2 || this.position.y >= height / 2) {
+        this.velocity.y *= -1;
+      }
+    }
+  </script>
+</body>
+</html>
