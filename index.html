@@ -376,9 +376,8 @@
         .game-tile.active { box-shadow: 0 0 0 1px #c4a882; }
         .game-tile iframe {
             position:absolute; inset:0; width:100%; height:100%;
-            border:none; pointer-events:none;
+            border:none; pointer-events:all;
         }
-        .game-tile.active iframe { pointer-events:all; }
         .game-tile .game-label {
             position:absolute; bottom:0; left:0; right:0;
             padding:8px; text-align:center;
@@ -387,18 +386,7 @@
             background:linear-gradient(transparent, rgba(0,0,0,0.7));
             pointer-events:none; z-index:2;
         }
-        .game-tile .game-click-shield {
-            position:absolute; inset:0; z-index:3;
-            background:rgba(0,0,0,0.3);
-            display:flex; align-items:center; justify-content:center;
-            cursor:pointer;
-        }
-        .game-tile .game-click-shield::after {
-            content:'TAP TO PLAY';
-            font-family:'Space Mono',monospace;
-            font-size:9px; letter-spacing:0.25em;
-            color:#c4a882; opacity:0.8;
-        }
+        .game-tile .game-click-shield { display:none; }
         #game-expand-overlay { display:none; }
         #game-exit-btn { display:none; }
 
@@ -489,7 +477,7 @@
     <div class="landing-corner tr" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner bl" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner br" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
-    <div style="position:absolute;bottom:28px;right:28px;z-index:5;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.2em;color:#333;pointer-events:none;">v1.4.4</div>
+    <div style="position:absolute;bottom:28px;right:28px;z-index:5;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.2em;color:#333;pointer-events:none;">v1.4.5</div>
 
     <!-- UI layer -->
     <div id="landing-ui" style="position:relative;z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;">
@@ -745,7 +733,6 @@
     <div class="game-grid">
         <div class="game-tile" data-game="floppycrops">
             <iframe src="floppy_crops.html" scrolling="no" allowfullscreen></iframe>
-            <div class="game-click-shield"></div>
             <div class="game-label">Floppy Crops</div>
         </div>
     </div>
@@ -1523,35 +1510,7 @@ document.querySelectorAll('.wave-word').forEach(word => {
         });
     });
 })();
-(function(){
-    let active = null;
-
-    function activate(tile) {
-        if (active && active !== tile) deactivate();
-        active = tile;
-        tile.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-
-    function deactivate() {
-        if (!active) return;
-        active.classList.remove('active');
-        document.body.style.overflow = '';
-        active = null;
-    }
-
-    document.querySelectorAll('.game-tile').forEach(tile => {
-        const shield = tile.querySelector('.game-click-shield');
-        shield.addEventListener('click', e => { e.stopPropagation(); activate(tile); });
-        shield.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); activate(tile); });
-    });
-
-    // Tap outside game to deactivate and re-enable scroll
-    document.addEventListener('click', e => {
-        if (active && !active.contains(e.target)) deactivate();
-    });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') deactivate(); });
-})();
+// games are always playable — no JS needed
 
 // ══════════════════════════════════════════════
 //  LANDING — VEHICLE PARTICLE SWARM
