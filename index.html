@@ -364,34 +364,34 @@
         #games { background:#111; }
         .game-grid {
             display:flex; flex-wrap:wrap; gap:24px;
-            padding:0 24px 80px; justify-content:center;
+            padding:0 24px 60px; justify-content:center;
         }
         .game-tile {
-            width: min(280px, 80vw);
+            width: min(260px, 75vw);
             aspect-ratio:9/16; background:#0d0d0d; position:relative;
-            cursor:pointer; overflow:hidden; border-radius:4px;
-            transition: transform 0.5s cubic-bezier(0.34,1.2,0.64,1),
-                        box-shadow 0.4s ease;
-            z-index:1;
+            overflow:hidden; border-radius:4px;
+            box-shadow: 0 0 0 1px #222;
+            transition: box-shadow 0.3s ease;
         }
+        .game-tile.active { box-shadow: 0 0 0 1px #c4a882; }
         .game-tile iframe {
             position:absolute; inset:0; width:100%; height:100%;
             border:none; pointer-events:none;
         }
+        .game-tile.active iframe { pointer-events:all; }
         .game-tile .game-label {
             position:absolute; bottom:0; left:0; right:0;
             padding:8px; text-align:center;
             font-family:'Space Mono',monospace; font-size:8px; letter-spacing:0.18em;
             text-transform:uppercase; color:#888;
             background:linear-gradient(transparent, rgba(0,0,0,0.7));
-            pointer-events:none; transition:opacity 0.3s;
-            z-index:2;
+            pointer-events:none; z-index:2;
         }
         .game-tile .game-click-shield {
             position:absolute; inset:0; z-index:3;
             background:rgba(0,0,0,0.3);
             display:flex; align-items:center; justify-content:center;
-            transition:background 0.3s;
+            cursor:pointer;
         }
         .game-tile .game-click-shield::after {
             content:'TAP TO PLAY';
@@ -399,33 +399,8 @@
             font-size:9px; letter-spacing:0.25em;
             color:#c4a882; opacity:0.8;
         }
-        .game-tile:hover .game-click-shield { background:rgba(0,0,0,0.15); }
-
-        /* Expanded — scale up in place on the page */
-        .game-tile.expanded {
-            transform: scale(2.8) !important;
-            z-index: 50 !important;
-            box-shadow: 0 0 0 1px #c4a882, 0 0 100px 20px rgba(0,0,0,0.98) !important;
-        }
-        .game-tile.expanded iframe { pointer-events:all !important; }
-        .game-tile.expanded .game-click-shield { display:none !important; }
-        .game-tile.expanded .game-label { opacity:0; }
         #game-expand-overlay { display:none; }
-
-        /* Exit button */
-        #game-exit-btn {
-            display:none; position:fixed;
-            bottom:24px; left:50%; transform:translateX(-50%);
-            z-index:200;
-            background:rgba(0,0,0,0.9);
-            border:1px solid #c4a882; color:#c4a882;
-            font-family:'Space Mono',monospace;
-            font-size:10px; letter-spacing:0.2em; text-transform:uppercase;
-            padding:12px 24px; cursor:pointer; border-radius:2px;
-            -webkit-tap-highlight-color:transparent;
-            white-space:nowrap;
-        }
-        #game-exit-btn.visible { display:block; }
+        #game-exit-btn { display:none; }
 
         /* ══ BRAIN TRUST ══ */
         #brain-trust { background:#0d0d0d;border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a; }
@@ -514,7 +489,7 @@
     <div class="landing-corner tr" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner bl" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner br" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
-    <div style="position:absolute;bottom:28px;right:28px;z-index:5;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.2em;color:#333;pointer-events:none;">v1.4.3</div>
+    <div style="position:absolute;bottom:28px;right:28px;z-index:5;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.2em;color:#333;pointer-events:none;">v1.4.4</div>
 
     <!-- UI layer -->
     <div id="landing-ui" style="position:relative;z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;">
@@ -776,9 +751,6 @@
     </div>
     </div>
 </section>
-
-<div id="game-expand-overlay"></div>
-<button id="game-exit-btn">✕ exit game</button>
 
 <!-- ══════════════════════════════════
      INTERACTIVE / VISUALIZER
@@ -1552,33 +1524,33 @@ document.querySelectorAll('.wave-word').forEach(word => {
     });
 })();
 (function(){
-    let expanded = null;
-    const exitBtn = document.getElementById('game-exit-btn');
+    let active = null;
 
-    function expandGame(tile) {
-        if (expanded) collapseGame();
-        expanded = tile;
-        tile.classList.add('expanded');
-        exitBtn.classList.add('visible');
-        setTimeout(() => tile.scrollIntoView({behavior:'smooth', block:'center'}), 100);
+    function activate(tile) {
+        if (active && active !== tile) deactivate();
+        active = tile;
+        tile.classList.add('active');
+        document.body.style.overflow = 'hidden';
     }
 
-    function collapseGame() {
-        if (!expanded) return;
-        expanded.classList.remove('expanded');
-        exitBtn.classList.remove('visible');
-        expanded = null;
+    function deactivate() {
+        if (!active) return;
+        active.classList.remove('active');
+        document.body.style.overflow = '';
+        active = null;
     }
 
     document.querySelectorAll('.game-tile').forEach(tile => {
         const shield = tile.querySelector('.game-click-shield');
-        shield.addEventListener('click', e => { e.stopPropagation(); expandGame(tile); });
-        shield.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); expandGame(tile); });
+        shield.addEventListener('click', e => { e.stopPropagation(); activate(tile); });
+        shield.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); activate(tile); });
     });
 
-    exitBtn.addEventListener('click', e => { e.stopPropagation(); collapseGame(); });
-    exitBtn.addEventListener('touchend', e => { e.preventDefault(); collapseGame(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') collapseGame(); });
+    // Tap outside game to deactivate and re-enable scroll
+    document.addEventListener('click', e => {
+        if (active && !active.contains(e.target)) deactivate();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') deactivate(); });
 })();
 
 // ══════════════════════════════════════════════
