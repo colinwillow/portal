@@ -408,18 +408,21 @@
         #game-expand-overlay.visible { display:block; }
         .game-tile.expanded {
             position:fixed !important;
-            inset: auto !important;
             left: 50% !important;
             top: 50% !important;
             transform: translate(-50%, -50%) !important;
-            width: min(92vw, calc(92vh * 9/16)) !important;
-            height: min(92vh, calc(92vw * 16/9)) !important;
+            width: min(96vw, calc(96vh * 9/16)) !important;
+            height: min(96vh, calc(96vw * 16/9)) !important;
             z-index: 501 !important;
             box-shadow: 0 0 0 2px #c4a882, 0 0 80px rgba(0,0,0,0.95) !important;
             border-radius: 4px;
+            touch-action: none;
         }
-        .game-tile.expanded iframe { pointer-events:all; }
-        .game-tile.expanded .game-click-shield { display:none; }
+        .game-tile.expanded iframe {
+            pointer-events: all !important;
+            touch-action: none;
+        }
+        .game-tile.expanded .game-click-shield { display:none !important; }
         #game-exit-btn {
             display:none;
             position:fixed;
@@ -1597,6 +1600,8 @@ document.querySelectorAll('.wave-word').forEach(word => {
         overlay.classList.add('visible');
         exitBtn.classList.add('visible');
         document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
     }
 
     function collapseGame() {
@@ -1605,13 +1610,16 @@ document.querySelectorAll('.wave-word').forEach(word => {
         overlay.classList.remove('visible');
         exitBtn.classList.remove('visible');
         document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
         expanded = null;
         focused = null;
     }
 
     document.querySelectorAll('.game-tile').forEach(tile => {
         const shield = tile.querySelector('.game-click-shield');
-        shield.addEventListener('click', () => {
+        shield.addEventListener('click', e => {
+            e.stopPropagation();
             if (isMobile()) {
                 expandGame(tile);
             } else {
@@ -1620,20 +1628,28 @@ document.querySelectorAll('.wave-word').forEach(word => {
                 focused = tile;
             }
         });
+
+        // Prevent taps on expanded tile from collapsing it
+        tile.addEventListener('click', e => {
+            if (tile === expanded) e.stopPropagation();
+        });
+        tile.addEventListener('touchstart', e => {
+            if (tile === expanded) e.stopPropagation();
+        }, {passive: true});
     });
 
-    exitBtn.addEventListener('click', collapseGame);
+    exitBtn.addEventListener('click', e => { e.stopPropagation(); collapseGame(); });
+    // Overlay click collapses (tapping outside the game)
     overlay.addEventListener('click', collapseGame);
 
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') {
-            collapseGame();
-            if (focused && !expanded) { focused.classList.remove('focused'); focused = null; }
-        }
+        if (e.key === 'Escape') collapseGame();
     });
 
+    // Only collapse desktop focused tiles when clicking outside — never collapse expanded
     document.addEventListener('click', e => {
-        if (focused && !expanded && !focused.contains(e.target)) {
+        if (expanded) return; // never auto-collapse expanded game
+        if (focused && !focused.contains(e.target)) {
             focused.classList.remove('focused');
             focused = null;
         }
