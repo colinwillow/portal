@@ -490,7 +490,7 @@
     <div class="landing-corner tr" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner bl" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner br" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
-    <div style="position:absolute;bottom:28px;right:28px;z-index:5;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.2em;color:#333;pointer-events:none;">v1.4.7</div>
+    <div style="position:absolute;bottom:28px;right:28px;z-index:5;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.2em;color:#333;pointer-events:none;">v1.5.0</div>
 
     <!-- UI layer -->
     <div id="landing-ui" style="position:relative;z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;">
@@ -745,7 +745,7 @@
     <div class="section-body" style="position:relative;z-index:1;">
     <div class="game-grid">
         <div class="game-tile" data-game="floppycrops">
-            <iframe src="floppy_crops.html" scrolling="no" allowfullscreen></iframe>
+            <iframe data-src="floppy_crops.html" scrolling="no" allowfullscreen></iframe>
             <div class="game-click-shield"></div>
             <div class="game-label">Floppy Crops</div>
         </div>
@@ -992,7 +992,14 @@ document.getElementById('brain-trust-toggle').addEventListener('click',()=>{
         }
     }
     const rects=Array.from({length:32},()=>new R());
-    (function loop(){bctx.clearRect(0,0,BW,BH);rects.forEach(r=>{r.update();r.draw();});requestAnimationFrame(loop);})();
+    let _bcRaf = null;
+    function _bcLoop(){bctx.clearRect(0,0,BW,BH);rects.forEach(r=>{r.update();r.draw();});_bcRaf=requestAnimationFrame(_bcLoop);}
+    const _bcObs = new IntersectionObserver(es=>es.forEach(e=>{
+        if(e.isIntersecting){if(!_bcRaf)_bcLoop();}
+        else{cancelAnimationFrame(_bcRaf);_bcRaf=null;}
+    }),{threshold:0.01});
+    _bcObs.observe(document.getElementById('border-canvas'));
+    _bcLoop();
 })();
 
 // ── CAPTCHA GAME ──
@@ -1389,8 +1396,8 @@ document.querySelectorAll('.wave-word').forEach(word => {
     const ctx = canvas.getContext('2d');
     let t = 0;
     let rafId = null;
-    const COLS = 6;  // number of contour levels
-    const STEP = 18; // grid resolution
+    const COLS = window.innerWidth < 768 ? 4 : 6;
+    const STEP = window.innerWidth < 768 ? 28 : 18;
 
     function resize() {
         const section = document.getElementById('games');
@@ -1526,7 +1533,32 @@ document.querySelectorAll('.wave-word').forEach(word => {
         });
     });
 })();
-// ── GAME — viewport meta swap to prevent double-tap zoom while playing ──
+// ── PERFORMANCE: lazy load game iframe when games section visible ──
+(function(){
+    const gamesSection = document.getElementById('games');
+    if (!gamesSection) return;
+    const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (!e.isIntersecting) return;
+            gamesSection.querySelectorAll('iframe[data-src]').forEach(iframe => {
+                iframe.src = iframe.dataset.src;
+                delete iframe.dataset.src;
+            });
+            obs.disconnect();
+        });
+    }, {threshold: 0.1});
+    obs.observe(gamesSection);
+})();
+
+// ── PERFORMANCE: cap frameRate on mobile ──
+(function(){
+    if (window.innerWidth < 768 && window._vizP5) {
+        window._vizP5.frameRate(30);
+    }
+    if (window.innerWidth < 768 && window._landingP5) {
+        window._landingP5.frameRate(30);
+    }
+})();
 (function(){
     let active = null;
     const exitBtn = document.getElementById('game-exit-btn');
@@ -1574,7 +1606,7 @@ document.querySelectorAll('.wave-word').forEach(word => {
 (function(){
     const landing  = document.getElementById('landing');
     const loader   = document.getElementById('landing-loader');
-    const NUM      = 1800;
+    const NUM      = window.innerWidth < 768 ? 600 : 1800;
     const SVG_SCALE = 0.55;
 
     // ── Sampling SVG paths into point arrays ──
@@ -1889,6 +1921,7 @@ document.querySelectorAll('.wave-word').forEach(word => {
             el.style.zIndex = '10';
             el.style.pointerEvents = 'none';
             p.clear();
+            if(window.innerWidth < 768) p.frameRate(30);
             updateLogoCenter();
             for (let i=0;i<NUM;i++) {
                 const v = new Vehicle();
@@ -1920,6 +1953,7 @@ document.querySelectorAll('.wave-word').forEach(word => {
 
         p.draw = function(){
             p.clear();
+            if(window.innerWidth < 768) p.frameRate(30);
             updateLogoCenter(); // re-read every frame so bounds always match actual DOM position
             vehicles.forEach(v => { v.update(p.frameCount); v.draw(); });
         };
@@ -1946,7 +1980,7 @@ document.querySelectorAll('.wave-word').forEach(word => {
     document.getElementById('landing-enter').addEventListener('click', () => {
         if (window._landingExplode) window._landingExplode();
         landing.classList.add('exiting');
-        setTimeout(() => landing.classList.add('gone'), 900);
+        setTimeout(() => { landing.classList.add('gone'); if(window._landingP5) window._landingP5.noLoop(); }, 900);
     });
 
     // ── Loading bar ──
