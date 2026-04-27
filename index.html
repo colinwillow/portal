@@ -397,50 +397,58 @@
         .game-tile.focused .game-click-shield { display:none; }
         .game-tile.focused .game-label { color:#c4a882; }
 
-        #game-expand-overlay {
-            display:none;
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.85);
-            z-index:499;
-            backdrop-filter:blur(4px);
+        /* game expand overlay — body pseudo avoids iOS stacking context issues */
+        body.game-expanded::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(4px);
+            z-index: 500;
+            pointer-events: all;
         }
-        #game-expand-overlay.visible { display:block; }
+        #game-expand-overlay { display:none; } /* kept for JS compat but unused visually */
         .game-tile.expanded {
-            position:fixed !important;
+            position: fixed !important;
             left: 50% !important;
             top: 50% !important;
             transform: translate(-50%, -50%) !important;
-            width: min(96vw, calc(96vh * 9/16)) !important;
-            height: min(96vh, calc(96vw * 16/9)) !important;
+            width: min(96vw, calc(92vh * 9/16)) !important;
+            height: min(96vh, calc(92vw * 16/9)) !important;
             z-index: 501 !important;
             box-shadow: 0 0 0 2px #c4a882, 0 0 80px rgba(0,0,0,0.95) !important;
             border-radius: 4px;
             touch-action: none;
+            isolation: isolate;
         }
         .game-tile.expanded iframe {
             pointer-events: all !important;
-            touch-action: none;
+            touch-action: manipulation;
+            position: absolute;
+            inset: 0;
+            width: 100% !important;
+            height: 100% !important;
         }
-        .game-tile.expanded .game-click-shield { display:none !important; }
+        .game-tile.expanded .game-click-shield { display: none !important; }
         #game-exit-btn {
-            display:none;
-            position:fixed;
-            top:16px;
-            right:16px;
-            z-index:501;
-            background:rgba(0,0,0,0.7);
-            border:1px solid #c4a882;
-            color:#c4a882;
-            font-family:'Space Mono',monospace;
-            font-size:10px;
-            letter-spacing:0.2em;
-            text-transform:uppercase;
-            padding:8px 14px;
-            cursor:pointer;
-            border-radius:2px;
+            display: none;
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 502;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #c4a882;
+            color: #c4a882;
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            padding: 10px 16px;
+            cursor: pointer;
+            border-radius: 2px;
+            -webkit-tap-highlight-color: transparent;
         }
-        #game-exit-btn.visible { display:block; }
+        #game-exit-btn.visible { display: block; }
         /* Game modal */
         #game-modal {
             display:none; position:fixed; inset:0; z-index:400;
@@ -550,6 +558,7 @@
     <div class="landing-corner tr" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner bl" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
     <div class="landing-corner br" style="z-index:4;"><svg viewBox="0 0 40 40" fill="none" stroke="#c4a882" stroke-width="1"><path d="M0 20 L0 0 L20 0"/></svg></div>
+    <div style="position:absolute;bottom:28px;right:28px;z-index:5;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.2em;color:#333;pointer-events:none;">v1.4.2</div>
 
     <!-- UI layer -->
     <div id="landing-ui" style="position:relative;z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;">
@@ -1597,7 +1606,7 @@ document.querySelectorAll('.wave-word').forEach(word => {
         if (expanded) collapseGame();
         expanded = tile;
         tile.classList.add('expanded', 'focused');
-        overlay.classList.add('visible');
+        document.body.classList.add('game-expanded');
         exitBtn.classList.add('visible');
         document.body.style.overflow = 'hidden';
         document.body.style.position = 'fixed';
@@ -1607,7 +1616,7 @@ document.querySelectorAll('.wave-word').forEach(word => {
     function collapseGame() {
         if (!expanded) return;
         expanded.classList.remove('expanded', 'focused');
-        overlay.classList.remove('visible');
+        document.body.classList.remove('game-expanded');
         exitBtn.classList.remove('visible');
         document.body.style.overflow = '';
         document.body.style.position = '';
@@ -1639,19 +1648,19 @@ document.querySelectorAll('.wave-word').forEach(word => {
     });
 
     exitBtn.addEventListener('click', e => { e.stopPropagation(); collapseGame(); });
-    // Overlay click collapses (tapping outside the game)
-    overlay.addEventListener('click', collapseGame);
-
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') collapseGame();
-    });
-
-    // Only collapse desktop focused tiles when clicking outside — never collapse expanded
+    // Click on the backdrop (behind the game) closes it
     document.addEventListener('click', e => {
-        if (expanded) return; // never auto-collapse expanded game
-        if (focused && !focused.contains(e.target)) {
-            focused.classList.remove('focused');
-            focused = null;
+        if (!expanded) {
+            // Desktop: unfocus on outside click
+            if (focused && !focused.contains(e.target)) {
+                focused.classList.remove('focused');
+                focused = null;
+            }
+            return;
+        }
+        // If click target is NOT inside the expanded tile and NOT the exit button, collapse
+        if (!expanded.contains(e.target) && e.target !== exitBtn) {
+            collapseGame();
         }
     });
 })();
