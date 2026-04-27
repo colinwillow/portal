@@ -397,21 +397,6 @@
         .game-tile.focused .game-click-shield { display:none; }
         .game-tile.focused .game-label { color:#c4a882; }
 
-        /* Mobile expanded game mode */
-        .game-tile.expanded {
-            position:fixed !important;
-            inset: auto !important;
-            left: 50% !important;
-            top: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            width: min(92vw, calc(92vh * 9/16)) !important;
-            height: min(92vh, calc(92vw * 16/9)) !important;
-            z-index: 500 !important;
-            box-shadow: 0 0 0 2px #c4a882, 0 0 80px rgba(0,0,0,0.95) !important;
-            border-radius: 4px;
-        }
-        .game-tile.expanded iframe { pointer-events:all; }
-        .game-tile.expanded .game-click-shield { display:none; }
         #game-expand-overlay {
             display:none;
             position:fixed;
@@ -421,6 +406,20 @@
             backdrop-filter:blur(4px);
         }
         #game-expand-overlay.visible { display:block; }
+        .game-tile.expanded {
+            position:fixed !important;
+            inset: auto !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: min(92vw, calc(92vh * 9/16)) !important;
+            height: min(92vh, calc(92vw * 16/9)) !important;
+            z-index: 501 !important;
+            box-shadow: 0 0 0 2px #c4a882, 0 0 80px rgba(0,0,0,0.95) !important;
+            border-radius: 4px;
+        }
+        .game-tile.expanded iframe { pointer-events:all; }
+        .game-tile.expanded .game-click-shield { display:none; }
         #game-exit-btn {
             display:none;
             position:fixed;
